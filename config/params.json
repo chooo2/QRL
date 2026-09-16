@@ -1,0 +1,76 @@
+{
+  "processors": {
+    "values": [
+        "grid_25",
+        "xtree_53",
+        "aspen_11",
+        "aspen_m",
+        "eagle",
+        "falcon"
+    ]
+  },
+  "chip_width":{
+    "description": "Fallback chip width in micrometers, at chip_baseline_num_qubits qubits, for topology families with no dedicated QPlacer-measured anchor (see _TOPOLOGY_FAMILY_ANCHORS_UM in ChipState.processor_config). Scaled by sqrt(num_qubits / chip_baseline_num_qubits) per processor for those families; heavy-hex/rigetti/xtree/grid use their own QPlacer anchor instead. NOTE: ChipState.processor_config's fallback branch only ever reads THIS key (chip_width) for both dimensions (chips are square there) -- chip_height below is not consulted by the active pipeline, but IS still read directly by src/legacy_rl/tests/test_defect_mask.py, so it is kept.",
+    "values": 10000
+  },
+  "chip_height":{
+    "description": "Fallback chip height in micrometers. NOT read by the active pipeline (ChipState.processor_config's fallback branch reads chip_width for both dimensions -- see its description) -- kept only because src/legacy_rl/tests/test_defect_mask.py reads params.chip_height directly.",
+    "values": 10000
+  },
+  "chip_baseline_num_qubits":{
+    "description": "Qubit count the chip_width/chip_height fallback baseline was calibrated for (used only by topology families without a dedicated QPlacer anchor). Chip area scales linearly with num_qubits (side length ~ sqrt(num_qubits)).",
+    "values": 27
+  },
+  "qubit_width":{
+    "description": "Physical qubit width in micrometers",
+    "values": 400
+  },
+  "qubit_height":{
+    "description": "Physical qubit height in micrometers",
+    "values": 400
+  },
+  "coupler_spectrum": {
+    "description": "coupler frequency spectrum in GHz [lo, hi]",
+    "values": [6.0, 7.0]
+  },
+  "qubit_anharmonicity_default_ghz": {
+    "description": "Fallback per-qubit transmon anharmonicity (E_C, negative) in GHz, used only when a processor's input JSON has no anharmonicity_ghz (e.g. legacy/random-heavy-hex processors). Real IBM backends supply per-qubit calibration values via database.py instead. Typical measured range: -0.31 to -0.34 GHz.",
+    "values": -0.33
+  },
+  "coupler_meander_pitch_um": {
+    "description": "effective meander pitch used to estimate coupler boundary area in micrometers. Both this value (40.0) and its predecessor (80.0) predate this repo's git history with no traceable derivation. 2026-09-14 physics audit tried re-deriving it as CPW trace envelope + inter-fold isolation = 120um and briefly set it here, but a same-day literature follow-up (scripts/coupler_pitch_literature_audit.py) could not find a PRIMARY source (measured/fabricated design, not a secondary citation) for the linewidth, gap, or fold-isolation components -- so the 120um value is HELD, not adopted, and this reverts to the prior 40.0 pending real evidence. See src/env/coupler_utils.py's _LITERATURE_CPW_* constants for what was tried and why it wasn't enough.",
+    "values": 40.0
+  },
+  "floorplan_candidate_count": {
+    "description": "number of floorplan candidates sampled to minimize edge crossing and coupler boundary overlap",
+    "values": 48
+  },
+  "floorplan_planarity_mode": {
+    "description": "how Floorplan.init() handles a non-planar coupling graph (zero-crossing single-layer layout is mathematically impossible for one) — 'strict' raises NonPlanarError, 'crossover' extracts a maximal planar subgraph and returns the cut edges for out-of-plane routing (air bridges). No chip in the current benchmark pool is non-planar (verified 2026-08-28), so this only matters for future/larger topologies.",
+    "values": "crossover"
+  },
+  "resolution": {
+    "description": "legalization grid resolution in micrometers",
+    "values": 100
+  },
+  "num_threads": {
+    "description": "number of threads for parallel processing",
+    "values": 16
+  },
+  "load_database": {
+    "description": "whether to load precomputed database",
+    "values": false
+  },
+  "save_log": {
+    "description": "whether to also write logs to a log/<timestamp>.log file (console output happens either way)",
+    "values": true
+  },
+  "min_qubit_spacing_um": {
+    "description": "minimum center-to-center qubit spacing for overlap avoidance and nearest-neighbor normalization in micrometers",
+    "values": 400.0
+  },
+  "connection_pad_width_um": {
+    "description": "TransmonPocket connection pad aperture width in micrometers (qiskit-metal: connection_pads.pad_width). Corresponds to the physical width of the coupler attachment pad on the qubit body.",
+    "values": 40.0
+  }
+}

@@ -1,0 +1,3 @@
+
+class DetailedPlacement:
+    pass

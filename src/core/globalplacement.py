@@ -1,0 +1,4 @@
+
+
+class GlobalPlacement:
+    pass
