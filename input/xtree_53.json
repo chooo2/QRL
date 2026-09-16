@@ -2,7 +2,8 @@
   "processor": "xtree_53",
   "num_qubits": 53,
   "topology": "xtree",
-  "chip_length_um": 9300,
+  "chip_width_um": 9300,
+  "chip_height_um": 9300,
   "coupling_graph": [
     [0, 1],
     [1, 0],

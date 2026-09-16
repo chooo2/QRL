@@ -4,5 +4,5 @@ class Rendering:
     def __init__(self, dir, state):
         pass
 
-def rendering_qiskit_metal(qubits, edges, output):
+def rendering_qiskit_metal(dir, state):
     pass

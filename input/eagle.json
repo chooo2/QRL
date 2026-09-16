@@ -3,7 +3,8 @@
   "description": "ibm kyoto 127 qubit heavy-hex processor",
   "num_qubits": 127,
   "topology": "heavy-hex",
-  "chip_length_um": 14900,
+  "chip_width_um": 14900,
+  "chip_height_um": 14900,
   "coupling_graph": [
     [0, 14],
     [1, 0],

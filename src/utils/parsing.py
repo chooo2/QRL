@@ -52,7 +52,7 @@ class Parser:
                         chip_height_um = chip_height_um if chip_height_um is not None else chip_length_um
 
                     config = {
-                        "topology": processor_name,
+                        "processor": processor_name,
                         "topology_family": topology_family,
                         "num_qubits": data.get("num_qubits"),
                         "coupling_map": re_coupling_map,
@@ -73,12 +73,12 @@ class Parser:
 
     # 이름으로 특정 processor config를 찾아 주요 필드를 언팩해 반환
     def target(self, target_name):
-        target_chip = next((config for config in self.load_json() if config["topology"] == target_name), None)
+        target_chip = next((config for config in self.load_json() if config["processor"] == target_name), None)
         if target_chip is None:
             _log.warning("Target processor '%s' not found.", target_name)
             return None, None, None, None, None
 
-        target_processor = target_chip.get("topology", "Unknown")
+        target_processor = target_chip.get("processor", "Unknown")
         num_qubits = target_chip.get("num_qubits", 0)
         coupling_map = target_chip.get("coupling_map", [])
         freq_ghz = target_chip.get("freq_ghz", [])
@@ -89,7 +89,7 @@ class Parser:
     def load_configs(self, names):
         all_configs = self.load_json()
 
-        by_name = {c['topology']: c for c in all_configs}
+        by_name = {c['processor']: c for c in all_configs}
 
         configs = []
         missing = []

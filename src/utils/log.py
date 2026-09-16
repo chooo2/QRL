@@ -32,3 +32,18 @@ def setup(name, save_log):
 
     logging.info("Log file: %s", log_file)
     return log_file
+
+## 각 단계 결과(ChipState) 확인부
+def log_chip_states(stage, states):
+    for s in states:
+        logging.info("[%s][%s] num_qubits=%d chip=(%s, %s) qubits=%d couplers=%d cmap=%d",
+                      stage, s.processor_name, s.num_qubits, s.chip_width, s.chip_height,
+                      len(s.qubits), len(s.couplers), len(s.cmap))
+
+        logging.info("Qubit")
+        for qid in sorted(s.qubits): logging.info(" %s", s.qubits[qid])
+
+        logging.info("Coupler")
+        for cid in sorted(s.couplers):
+            c = s.couplers[cid]
+            logging.info(" %s l=%.2fum", c, c.l)

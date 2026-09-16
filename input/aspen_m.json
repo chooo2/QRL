@@ -2,7 +2,8 @@
   "processor": "aspen_m",
   "num_qubits": 80,
   "topology": "octagon",
-  "chip_length_um": 12900,
+  "chip_width_um": 12900,
+  "chip_height_um": 12900,
   "coupling_graph": [
     [0, 1],
     [1, 0],

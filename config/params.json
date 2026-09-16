@@ -39,7 +39,7 @@
   },
   "coupler_meander_pitch_um": {
     "description": "effective meander pitch used to estimate coupler boundary area in micrometers. Both this value (40.0) and its predecessor (80.0) predate this repo's git history with no traceable derivation. 2026-09-14 physics audit tried re-deriving it as CPW trace envelope + inter-fold isolation = 120um and briefly set it here, but a same-day literature follow-up (scripts/coupler_pitch_literature_audit.py) could not find a PRIMARY source (measured/fabricated design, not a secondary citation) for the linewidth, gap, or fold-isolation components -- so the 120um value is HELD, not adopted, and this reverts to the prior 40.0 pending real evidence. See src/env/coupler_utils.py's _LITERATURE_CPW_* constants for what was tried and why it wasn't enough.",
-    "values": 40.0
+    "values": 200.0
   },
   "floorplan_candidate_count": {
     "description": "number of floorplan candidates sampled to minimize edge crossing and coupler boundary overlap",

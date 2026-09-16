@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 @dataclass
 class Qubit:
     id: int         # node id
-    w: float        # width
-    h: float        # height
-    f: float        # frequency ghz
-    x: float = 0.0  # x-coordinate(center)
-    y: float = 0.0  # y-coordinate(center)
+    w:  float        # width
+    h:  float        # height
+    f:  float        # frequency ghz
+    x:  float = 0.0  # x-coordinate(center)
+    y:  float = 0.0  # y-coordinate(center)
 
     @property
     def ports(self):
@@ -21,13 +21,15 @@ class Qubit:
             "bottom_right": (self.x + off_x, self.y - off_y),
         }
 
+    def __str__(self):
+        return f"id={self.id:>3d} w={self.w:>6.2f} h={self.h:>6.2f} "f"f={self.f:>5.2f}GHz x={self.x:>8.2f} y={self.y:>8.2f}"
 @dataclass
 class Coupler:
-    id: int     # edge id
-    q1: int     # start qubit id
-    q2: int     # end qubit id
-    f: float    # edge(coupler) frequency ghz — half-wave 길이 공식의 입력
-    p: float    # meander pitch (um)
+    id: int      # edge id
+    q1: int      # start qubit id
+    q2: int      # end qubit id
+    f:  float    # edge(coupler) frequency ghz
+    p:  float    # meander pitch (um)
 
     @property
     def l(self):
@@ -43,17 +45,47 @@ class Coupler:
         cx, cy = (q1.x + q2.x) / 2.0, (q1.y + q2.y) / 2.0
         return (cx - half_w, cx + half_w, cy - half_h, cy + half_h)
 
+    def __str__(self):
+        return f"id={self.id:>3d} q1={self.q1:>3d} q2={self.q2:>3d} " f"f={self.f:>5.2f}GHz p={self.p:>6.2f}um"
+
 @dataclass
 class ChipState:
     processor_name: str
     num_qubits: int
     cmap: tuple  # coupling map: ((q1, q2), ...)
+    chip_width: float
+    chip_height: float
 
     qubits: dict[int, Qubit] = field(default_factory=dict)
     couplers: dict[tuple[int, int], Coupler] = field(default_factory=dict)
 
-    chip_width: float = 0.0
-    chip_height: float = 0.0
+    @classmethod
+    def processor_config(cls, config: dict, params) -> "ChipState":
+        num_qubits = config["num_qubits"]
+        cmap = tuple(config["coupling_map"])
+        # chip_width = config.get("chip_width_um") or params.chip_width
+        # chip_height = config.get("chip_height_um") or chip_width
+        chip_width = config.get("chip_width_um")
+        chip_height = config.get("chip_height_um")
+    
+        freq_ghz = config["freq_ghz"]
+        qubits = {
+            i: Qubit(id=i, w=params.qubit_width, h=params.qubit_height, f=freq_ghz[i])
+            for i in range(num_qubits)
+        }
 
-    # 결함 등으로 비활성화된 큐빗을 걸러내기 위한 마스크. None이면 전체가 active.
-    active_qubits: set[int] | None = None
+        edge_freq = {(min(u, v), max(u, v)): f for u, v, f in config["edge_freq_ghz"]}
+        couplers = {
+            (q1, q2): Coupler(id=idx, q1=q1, q2=q2, f=edge_freq[(q1, q2)], p=params.coupler_meander_pitch_um)
+            for idx, (q1, q2) in enumerate(cmap)
+        }
+
+        return cls(
+            processor_name  = config["processor"],
+            num_qubits      = num_qubits,
+            cmap            = cmap,
+            chip_width      = chip_width,
+            chip_height     = chip_height,
+            qubits          = qubits,
+            couplers        = couplers
+        )

@@ -2,7 +2,8 @@
   "processor": "grid_25",
   "num_qubits": 25,
   "topology": "grid",
-  "chip_length_um": 7800,
+  "chip_width_um": 7800,
+  "chip_height_um": 7800,
   "coupling_graph": [
     [0, 1],
     [1, 0],
