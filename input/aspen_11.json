@@ -2,8 +2,12 @@
   "processor": "aspen_11",
   "num_qubits": 40,
   "topology": "octagon",
-  "chip_width_um": 9000,
-  "chip_height_um": 9000,
+  "chip_width_um": 9995.8,
+  "chip_height_um": 9995.8,
+  "_provenance": {
+    "chip_width_um": "Updated 2026-09-16 to 9995.8 -- 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['aspen'][40.0], confirmed by directly running 01_mainref's own pipeline for this chip (its Floorplan stage used chip_width=9995.8). Previous value (9000) came from 01_mainref/bak/input2/octagon/aspen_11.json (processor='aspen-11', chip_length_um=9000, pre-2026-09-14 snapshot) -- a value 01_mainref's own _topology_family('aspen_11')=='aspen' dispatch never actually produces; 9000 instead coincides with the unrelated 'rigetti' family's 40q anchor. Note: mainref's die-anchor resize history (scripts/results_260913/die_anchor_resize_v3.json) shows an intermediate value of 11029.8um that was tried and found unnecessarily large (9995.8 already passed all 5 tested seeds) before settling on 9995.8 -- so 11029.8 is a real historical number in that search, just not the final one.",
+    "reason_for_fix": "At chip_width_um=9000, this repo's Floorplan (core/floorplan.py) failed with PlacementInfeasibleError -- primary layout achieved 0 crossings but only 387.5um min qubit spacing (need 400.0), and the deterministic guarantee fallback did worse (346.0um). Investigation (2026-09-16) found 01_mainref's original algorithm passes at 9000 too (423.9um, via steps this repo's FP intentionally excludes -- see core/floorplan.py module docstring), so the die-size mismatch and the excluded-refinement-steps gap are two independent, compounding issues. This fix addresses the die-size one, using mainref's actual current anchor (not the port's bare pass threshold of ~9244um) so it isn't sitting right at the edge of failing again."
+  },
   "coupling_graph": [
     [0, 1],
     [1, 0],

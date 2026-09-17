@@ -4,6 +4,9 @@
   "topology": "octagon",
   "chip_width_um": 12900,
   "chip_height_um": 12900,
+  "_provenance": {
+    "chip_width_um": "01_mainref/bak/input2/octagon/aspen_m.json (processor='aspen-m', chip_length_um=12900, pre-2026-09-14 snapshot). STALE: 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['aspen'][40.0]=9995.8 log-extrapolated to 80q gives 14136.2 (+9.6%), superseding this (same family/staleness pattern as aspen_11, see that file's _provenance). NOT updated in this repo as of 2026-09-16 -- out of scope for the aspen_11 fix, flagged for future review."
+  },
   "coupling_graph": [
     [0, 1],
     [1, 0],

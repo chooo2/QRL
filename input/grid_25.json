@@ -4,6 +4,9 @@
   "topology": "grid",
   "chip_width_um": 7800,
   "chip_height_um": 7800,
+  "_provenance": {
+    "chip_width_um": "01_mainref/bak/input2/grid/grid_25.json (chip_length_um=7800.0, pre-2026-09-14 snapshot). Matches 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['grid'][25.0]=7800.0 exactly -- the one chip of the 6 where the old snapshot still agrees with mainref's later die-anchor resize research (2026-09-14/15, 'Part N'). No update needed."
+  },
   "coupling_graph": [
     [0, 1],
     [1, 0],

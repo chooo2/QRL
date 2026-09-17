@@ -5,6 +5,9 @@
   "topology": "heavy-hex",
   "chip_width_um": 6900,
   "chip_height_um": 6900,
+  "_provenance": {
+    "chip_width_um": "01_mainref/bak/input2/heavy-hex/falcon.json (chip_length_um=6900, pre-2026-09-14 snapshot). STALE: 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['ibm_real_device'][27.0]=10049.9 (+45.6%) supersedes this after a two-round resize (die_anchor_resize_v3.json intermediate=6767.6, then v4.json final=10049.9). NOT updated in this repo as of 2026-09-16 -- out of scope for the aspen_11 fix, flagged for future review."
+  },
   "coupling_graph": [
     [0, 1],
     [1, 0],

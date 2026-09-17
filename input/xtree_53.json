@@ -4,6 +4,9 @@
   "topology": "xtree",
   "chip_width_um": 9300,
   "chip_height_um": 9300,
+  "_provenance": {
+    "chip_width_um": "01_mainref/bak/input2/xtree/xtree_53.json (chip_length_um=9300, pre-2026-09-14 snapshot). STALE: 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['xtree'][53.0]=10485.8 (+12.75%) supersedes this after mainref's die-anchor resize research (2026-09-14/15, see 01_mainref/scripts/results_260913/die_anchor_resize_v3.json and v4.json). NOT updated in this repo as of 2026-09-16 -- out of scope for the aspen_11 fix, flagged for future review."
+  },
   "coupling_graph": [
     [0, 1],
     [1, 0],

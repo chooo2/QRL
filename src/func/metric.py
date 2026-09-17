@@ -12,7 +12,8 @@ metric_label: dict[str, tuple[str, str]] = {
     "drc_qq_overlap":           ("Qubit-Qubit Overlap", ""),
     "drc_qc_overlap":           ("Qubit-Coupler Overlap", ""),
     "drc_cc_overlap":           ("Coupler-Coupler Overlap", ""),
-    "drc_edge_cross":           ("Edge Cross", "")
+    "drc_edge_cross":           ("Edge Cross", ""),
+    "num_unplaced_couplers":    ("Unplaced Couplers (qc/cc DRC skipped)", ""),
 }
 
 @dataclass
@@ -29,6 +30,11 @@ class Metric:
     drc_qc_overlap: bool            # 큐빗-커플러 겹침 없음 여부
     drc_cc_overlap: bool            # 커플러-커플러 겹침 없음 여부 (coupler_cross_point == 0)
     drc_edge_cross: bool            # 논리 엣지 교차 없음 여부 (edge_cross_point == 0)
+
+    # bbox()가 없어(세그먼트 미배치) qc_overlap/cc_overlap 검사에서 제외된 커플러 수.
+    # 0이 아니면 drc_qc_overlap/drc_cc_overlap의 "위반 없음"은 검사가 스킵됐다는 뜻이지
+    # 실제로 통과했다는 뜻이 아니다 — 반드시 이 값과 같이 읽어야 한다.
+    num_unplaced_couplers: int
 
     fidelity: float | None = None   # Fidelity (계산식 미정 — compute_fidelity 참고)
 

@@ -51,51 +51,48 @@ def main(params):
 
 
     """ Floorplanning """
-    fp_state: list[ChipState] = []
     tt = time.perf_counter()
-    Floorplan(init_state, fp_state)
+    fp = Floorplan(params)
+    fp_state = fp.run(init_state)
     run["FP"] = time.perf_counter() - tt
     log_chip_states("FP", fp_state)
-    qm_fp_state: list[ChipState] = []
+    for name, reason in fp.skipped:
+        logging.warning("[FP] skipped %s: %s", name, reason)
 
 
     """ Global Placement"""
 ### 전반적인 배치 최적화 --> Planarity, Crosstalk, Wirelength, Congestion
-    gp_state: list[ChipState] = []
     tt = time.perf_counter()
-    GlobalPlacement(fp_state, gp_state)
+    gp = GlobalPlacement(params)
+    gp_state = gp.run(fp_state)
     run["GP"] = time.perf_counter() - tt
     log_chip_states("GP", gp_state)
-    qm_gp_state: list[ChipState] = [] # 나중에 qiskit-metal 호환으로 convert시켜야함
 
 
     """ Legalization """
 ### Overlap 해소
-    lg_state: list[ChipState] = []
     tt = time.perf_counter()
-    Legalization(gp_state, lg_state)
+    lg = Legalization(params)
+    lg_state = lg.run(gp_state)
     run["LG"] = time.perf_counter() - tt
     log_chip_states("LG", lg_state)
-    qm_lg_state: list[ChipState] = [] # 나중에 qiskit-metal 호환으로 convert시켜야함
 
 
     """ Detailed Placement """
 ### Hotspot이 가장 심한 위치 파악 후, 미세 조정
-    dp_state: list[ChipState] = []
     tt = time.perf_counter()
-    DetailedPlacement(lg_state, dp_state)
+    dp = DetailedPlacement(params)
+    dp_state = dp.run(lg_state)
     run["DP"] = time.perf_counter() - tt
     log_chip_states("DP", dp_state)
-    qm_dp_state: list[ChipState] = [] # 나중에 qiskit-metal 호환으로 convert시켜야함
 
 
     """ Routing """
 ### Routing, Finish단계
-    rt_state: list[ChipState] = []
     tt = time.perf_counter()
-    Router(dp_state, rt_state)
+    rt = Router(params)
+    rt_state = rt.run(dp_state)
     run["Finish"] = time.perf_counter() - tt
-    qm_rt_state: list[ChipState] = [] # 나중에 qiskit-metal 호환으로 convert시켜야함
 
 
     """ Basic Rendering """
@@ -106,11 +103,11 @@ def main(params):
     Rendering(RT, rt_state)
 
     """ Qiskit-Metal Rendering """
-    rendering_qiskit_metal(QM_FP, qm_fp_state)
-    rendering_qiskit_metal(QM_GP, qm_gp_state)
-    rendering_qiskit_metal(QM_LG, qm_lg_state)
-    rendering_qiskit_metal(QM_DP, qm_dp_state)
-    rendering_qiskit_metal(QM_RT, qm_rt_state)
+    rendering_qiskit_metal(QM_FP, fp_state)
+    rendering_qiskit_metal(QM_GP, gp_state)
+    rendering_qiskit_metal(QM_LG, lg_state)
+    rendering_qiskit_metal(QM_DP, dp_state)
+    rendering_qiskit_metal(QM_RT, rt_state)
 
 
     """ Evaluation """

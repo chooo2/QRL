@@ -1,0 +1,1578 @@
+[INFO] Log file: /home/LabMember/ngchoi/research/02_0909/log/20260916_235712.log
+[INFO] Processors: ['grid_25', 'xtree_53', 'aspen_11', 'aspen_m', 'eagle', 'falcon']
+[INFO] [Preprocessing][grid_25] num_qubits=25 chip=(7800, 7800) qubits=25 couplers=40 cmap=40
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.98GHz x=    0.00 y=    0.00
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.13GHz x=    0.00 y=    0.00
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.99GHz x=    0.00 y=    0.00
+[INFO]  id=  3 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.88GHz x=    0.00 y=    0.00
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.15GHz x=    0.00 y=    0.00
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.05GHz x=    0.00 y=    0.00
+[INFO]  id=  9 w=400.00 h=400.00 f= 5.08GHz x=    0.00 y=    0.00
+[INFO]  id= 10 w=400.00 h=400.00 f= 4.93GHz x=    0.00 y=    0.00
+[INFO]  id= 11 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id= 12 w=400.00 h=400.00 f= 4.91GHz x=    0.00 y=    0.00
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 15 w=400.00 h=400.00 f= 4.93GHz x=    0.00 y=    0.00
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.83GHz x=    0.00 y=    0.00
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.09GHz x=    0.00 y=    0.00
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.90GHz x=    0.00 y=    0.00
+[INFO]  id= 19 w=400.00 h=400.00 f= 5.09GHz x=    0.00 y=    0.00
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 21 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 22 w=400.00 h=400.00 f= 4.92GHz x=    0.00 y=    0.00
+[INFO]  id= 23 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.97GHz x=    0.00 y=    0.00
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id=  1 q1=  0 q2=  3 f= 6.93GHz segments=0 l=8516.82um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.32GHz segments=0 l=9338.86um
+[INFO]  id=  3 q1=  1 q2=  4 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id=  4 q1=  2 q2=  3 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id=  5 q1=  2 q2=  5 f= 6.57GHz segments=0 l=8983.50um
+[INFO]  id=  6 q1=  2 q2=  7 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id=  7 q1=  3 q2=  8 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id=  8 q1=  4 q2=  5 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=  9 q1=  4 q2=  9 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 10 q1=  5 q2=  6 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id= 11 q1=  5 q2= 10 f= 6.88GHz segments=0 l=8578.72um
+[INFO]  id= 12 q1=  6 q2=  7 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 13 q1=  6 q2= 11 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id= 14 q1=  6 q2= 13 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 15 q1=  7 q2=  8 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 16 q1=  7 q2= 14 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 17 q1=  8 q2= 15 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 18 q1=  9 q2= 10 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 19 q1=  9 q2= 16 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id= 20 q1= 10 q2= 11 f= 6.32GHz segments=0 l=9338.86um
+[INFO]  id= 21 q1= 10 q2= 17 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 22 q1= 11 q2= 12 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 23 q1= 11 q2= 18 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 24 q1= 12 q2= 13 f= 6.80GHz segments=0 l=8679.64um
+[INFO]  id= 25 q1= 12 q2= 19 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 26 q1= 12 q2= 21 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 27 q1= 13 q2= 14 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 28 q1= 13 q2= 22 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 29 q1= 14 q2= 15 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 30 q1= 14 q2= 23 f= 6.05GHz segments=0 l=9755.63um
+[INFO]  id= 31 q1= 15 q2= 24 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 32 q1= 16 q2= 17 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 33 q1= 17 q2= 18 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id= 34 q1= 18 q2= 19 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id= 35 q1= 19 q2= 20 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 36 q1= 20 q2= 21 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 37 q1= 21 q2= 22 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id= 38 q1= 22 q2= 23 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 39 q1= 23 q2= 24 f= 6.37GHz segments=0 l=9265.55um
+[INFO] [Preprocessing][xtree_53] num_qubits=53 chip=(9300, 9300) qubits=53 couplers=52 cmap=52
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.98GHz x=    0.00 y=    0.00
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.01GHz x=    0.00 y=    0.00
+[INFO]  id=  2 w=400.00 h=400.00 f= 5.01GHz x=    0.00 y=    0.00
+[INFO]  id=  3 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.94GHz x=    0.00 y=    0.00
+[INFO]  id=  5 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 15 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 16 w=400.00 h=400.00 f= 5.02GHz x=    0.00 y=    0.00
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 18 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 19 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.12GHz x=    0.00 y=    0.00
+[INFO]  id= 22 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 23 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.86GHz x=    0.00 y=    0.00
+[INFO]  id= 27 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.01GHz x=    0.00 y=    0.00
+[INFO]  id= 29 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 30 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 31 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.98GHz x=    0.00 y=    0.00
+[INFO]  id= 33 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 34 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 36 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 38 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id= 39 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 40 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 41 w=400.00 h=400.00 f= 4.97GHz x=    0.00 y=    0.00
+[INFO]  id= 42 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 43 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 44 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id= 45 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id= 46 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 47 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 48 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 49 w=400.00 h=400.00 f= 4.95GHz x=    0.00 y=    0.00
+[INFO]  id= 50 w=400.00 h=400.00 f= 5.04GHz x=    0.00 y=    0.00
+[INFO]  id= 51 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id= 52 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id=  1 q1=  0 q2=  2 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id=  2 q1=  0 q2=  3 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id=  3 q1=  0 q2=  4 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id=  4 q1=  1 q2=  5 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id=  5 q1=  1 q2=  6 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=  6 q1=  1 q2=  7 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id=  7 q1=  2 q2=  8 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id=  8 q1=  2 q2=  9 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id=  9 q1=  2 q2= 10 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 10 q1=  3 q2= 11 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id= 11 q1=  3 q2= 12 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id= 12 q1=  3 q2= 13 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 13 q1=  4 q2= 14 f= 6.74GHz segments=0 l=8756.91um
+[INFO]  id= 14 q1=  4 q2= 15 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 15 q1=  4 q2= 16 f= 6.86GHz segments=0 l=8603.73um
+[INFO]  id= 16 q1=  5 q2= 17 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 17 q1=  5 q2= 18 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id= 18 q1=  5 q2= 19 f= 6.52GHz segments=0 l=9052.39um
+[INFO]  id= 19 q1=  6 q2= 20 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 20 q1=  6 q2= 21 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 21 q1=  6 q2= 22 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 22 q1=  7 q2= 23 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 23 q1=  7 q2= 24 f= 6.35GHz segments=0 l=9294.74um
+[INFO]  id= 24 q1=  7 q2= 25 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 25 q1=  8 q2= 26 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id= 26 q1=  8 q2= 27 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 27 q1=  8 q2= 28 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id= 28 q1=  9 q2= 29 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 29 q1=  9 q2= 30 f= 6.06GHz segments=0 l=9739.54um
+[INFO]  id= 30 q1=  9 q2= 31 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 31 q1= 10 q2= 32 f= 6.50GHz segments=0 l=9080.24um
+[INFO]  id= 32 q1= 10 q2= 33 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 33 q1= 10 q2= 34 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id= 34 q1= 11 q2= 35 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id= 35 q1= 11 q2= 36 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 36 q1= 11 q2= 37 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id= 37 q1= 12 q2= 38 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 38 q1= 12 q2= 39 f= 6.61GHz segments=0 l=8929.14um
+[INFO]  id= 39 q1= 12 q2= 40 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id= 40 q1= 13 q2= 41 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 41 q1= 13 q2= 42 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id= 42 q1= 13 q2= 43 f= 6.28GHz segments=0 l=9398.34um
+[INFO]  id= 43 q1= 14 q2= 44 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 44 q1= 14 q2= 45 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id= 45 q1= 14 q2= 46 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 46 q1= 15 q2= 47 f= 6.00GHz segments=0 l=9836.93um
+[INFO]  id= 47 q1= 15 q2= 48 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id= 48 q1= 15 q2= 49 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 49 q1= 16 q2= 50 f= 6.75GHz segments=0 l=8743.94um
+[INFO]  id= 50 q1= 16 q2= 51 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 51 q1= 16 q2= 52 f= 6.24GHz segments=0 l=9458.59um
+[INFO] [Preprocessing][aspen_11] num_qubits=40 chip=(9995.8, 9995.8) qubits=40 couplers=48 cmap=48
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.88GHz x=    0.00 y=    0.00
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.90GHz x=    0.00 y=    0.00
+[INFO]  id=  3 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.94GHz x=    0.00 y=    0.00
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.88GHz x=    0.00 y=    0.00
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.02GHz x=    0.00 y=    0.00
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id= 15 w=400.00 h=400.00 f= 5.00GHz x=    0.00 y=    0.00
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id= 19 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.08GHz x=    0.00 y=    0.00
+[INFO]  id= 22 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 23 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.13GHz x=    0.00 y=    0.00
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 27 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 29 w=400.00 h=400.00 f= 4.95GHz x=    0.00 y=    0.00
+[INFO]  id= 30 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 31 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.83GHz x=    0.00 y=    0.00
+[INFO]  id= 33 w=400.00 h=400.00 f= 5.13GHz x=    0.00 y=    0.00
+[INFO]  id= 34 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.13GHz x=    0.00 y=    0.00
+[INFO]  id= 36 w=400.00 h=400.00 f= 4.88GHz x=    0.00 y=    0.00
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.02GHz x=    0.00 y=    0.00
+[INFO]  id= 38 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 39 w=400.00 h=400.00 f= 4.95GHz x=    0.00 y=    0.00
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id=  1 q1=  0 q2=  7 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=  4 q1=  3 q2=  4 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id=  5 q1=  4 q2=  5 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id=  6 q1=  5 q2=  6 f= 6.37GHz segments=0 l=9265.55um
+[INFO]  id=  7 q1=  5 q2= 10 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id=  8 q1=  6 q2=  7 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id=  9 q1=  6 q2=  9 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 10 q1=  8 q2=  9 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 11 q1=  8 q2= 15 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 12 q1=  9 q2= 10 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 13 q1= 10 q2= 11 f= 7.00GHz segments=0 l=8431.65um
+[INFO]  id= 14 q1= 11 q2= 12 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 15 q1= 12 q2= 13 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 16 q1= 13 q2= 14 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 17 q1= 13 q2= 18 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 18 q1= 14 q2= 15 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 19 q1= 14 q2= 17 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 20 q1= 16 q2= 17 f= 6.09GHz segments=0 l=9691.56um
+[INFO]  id= 21 q1= 16 q2= 23 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id= 22 q1= 17 q2= 18 f= 6.37GHz segments=0 l=9265.55um
+[INFO]  id= 23 q1= 18 q2= 19 f= 6.57GHz segments=0 l=8983.50um
+[INFO]  id= 24 q1= 19 q2= 20 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 25 q1= 20 q2= 21 f= 6.31GHz segments=0 l=9353.66um
+[INFO]  id= 26 q1= 21 q2= 22 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 27 q1= 21 q2= 26 f= 6.75GHz segments=0 l=8743.94um
+[INFO]  id= 28 q1= 22 q2= 23 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 29 q1= 22 q2= 25 f= 6.94GHz segments=0 l=8504.55um
+[INFO]  id= 30 q1= 24 q2= 25 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 31 q1= 24 q2= 31 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id= 32 q1= 25 q2= 26 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 33 q1= 26 q2= 27 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id= 34 q1= 27 q2= 28 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 35 q1= 28 q2= 29 f= 6.91GHz segments=0 l=8541.47um
+[INFO]  id= 36 q1= 29 q2= 30 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 37 q1= 29 q2= 34 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id= 38 q1= 30 q2= 31 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 39 q1= 30 q2= 33 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 40 q1= 32 q2= 33 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 41 q1= 32 q2= 39 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 42 q1= 33 q2= 34 f= 6.35GHz segments=0 l=9294.74um
+[INFO]  id= 43 q1= 34 q2= 35 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 44 q1= 35 q2= 36 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 45 q1= 36 q2= 37 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id= 46 q1= 37 q2= 38 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id= 47 q1= 38 q2= 39 f= 6.05GHz segments=0 l=9755.63um
+[INFO] [Preprocessing][aspen_m] num_qubits=80 chip=(12900, 12900) qubits=80 couplers=106 cmap=106
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.09GHz x=    0.00 y=    0.00
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id=  3 w=400.00 h=400.00 f= 5.15GHz x=    0.00 y=    0.00
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.93GHz x=    0.00 y=    0.00
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id=  8 w=400.00 h=400.00 f= 4.92GHz x=    0.00 y=    0.00
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.12GHz x=    0.00 y=    0.00
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 15 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 19 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.15GHz x=    0.00 y=    0.00
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.10GHz x=    0.00 y=    0.00
+[INFO]  id= 22 w=400.00 h=400.00 f= 5.10GHz x=    0.00 y=    0.00
+[INFO]  id= 23 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id= 24 w=400.00 h=400.00 f= 5.09GHz x=    0.00 y=    0.00
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.83GHz x=    0.00 y=    0.00
+[INFO]  id= 27 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 29 w=400.00 h=400.00 f= 4.86GHz x=    0.00 y=    0.00
+[INFO]  id= 30 w=400.00 h=400.00 f= 5.10GHz x=    0.00 y=    0.00
+[INFO]  id= 31 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 33 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 34 w=400.00 h=400.00 f= 5.01GHz x=    0.00 y=    0.00
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 36 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 38 w=400.00 h=400.00 f= 4.90GHz x=    0.00 y=    0.00
+[INFO]  id= 39 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 40 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 41 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 42 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 43 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id= 44 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 45 w=400.00 h=400.00 f= 5.17GHz x=    0.00 y=    0.00
+[INFO]  id= 46 w=400.00 h=400.00 f= 4.86GHz x=    0.00 y=    0.00
+[INFO]  id= 47 w=400.00 h=400.00 f= 5.10GHz x=    0.00 y=    0.00
+[INFO]  id= 48 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id= 49 w=400.00 h=400.00 f= 5.18GHz x=    0.00 y=    0.00
+[INFO]  id= 50 w=400.00 h=400.00 f= 4.90GHz x=    0.00 y=    0.00
+[INFO]  id= 51 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 52 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 53 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 54 w=400.00 h=400.00 f= 5.00GHz x=    0.00 y=    0.00
+[INFO]  id= 55 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 56 w=400.00 h=400.00 f= 5.02GHz x=    0.00 y=    0.00
+[INFO]  id= 57 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id= 58 w=400.00 h=400.00 f= 5.02GHz x=    0.00 y=    0.00
+[INFO]  id= 59 w=400.00 h=400.00 f= 4.89GHz x=    0.00 y=    0.00
+[INFO]  id= 60 w=400.00 h=400.00 f= 5.10GHz x=    0.00 y=    0.00
+[INFO]  id= 61 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 62 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 63 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 64 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 65 w=400.00 h=400.00 f= 5.13GHz x=    0.00 y=    0.00
+[INFO]  id= 66 w=400.00 h=400.00 f= 5.05GHz x=    0.00 y=    0.00
+[INFO]  id= 67 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 68 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id= 69 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 70 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 71 w=400.00 h=400.00 f= 4.99GHz x=    0.00 y=    0.00
+[INFO]  id= 72 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 73 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 74 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 75 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 76 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 77 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 78 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 79 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.27GHz segments=0 l=9413.33um
+[INFO]  id=  1 q1=  0 q2=  7 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.28GHz segments=0 l=9398.34um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.07GHz segments=0 l=9723.49um
+[INFO]  id=  4 q1=  3 q2=  4 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id=  5 q1=  3 q2=  8 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id=  6 q1=  4 q2=  5 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id=  7 q1=  4 q2= 15 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id=  8 q1=  5 q2=  6 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id=  9 q1=  5 q2= 18 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id= 10 q1=  6 q2=  7 f= 6.05GHz segments=0 l=9755.63um
+[INFO]  id= 11 q1=  6 q2= 17 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 12 q1=  8 q2=  9 f= 6.95GHz segments=0 l=8492.31um
+[INFO]  id= 13 q1=  8 q2= 15 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 14 q1=  9 q2= 10 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id= 15 q1= 10 q2= 11 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 16 q1= 11 q2= 12 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id= 17 q1= 12 q2= 13 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id= 18 q1= 13 q2= 14 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 19 q1= 13 q2= 26 f= 6.85GHz segments=0 l=8616.29um
+[INFO]  id= 20 q1= 14 q2= 15 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 21 q1= 14 q2= 25 f= 6.97GHz segments=0 l=8467.95um
+[INFO]  id= 22 q1= 16 q2= 17 f= 6.00GHz segments=0 l=9836.93um
+[INFO]  id= 23 q1= 16 q2= 23 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 24 q1= 17 q2= 18 f= 6.16GHz segments=0 l=9581.43um
+[INFO]  id= 25 q1= 18 q2= 19 f= 6.82GHz segments=0 l=8654.19um
+[INFO]  id= 26 q1= 19 q2= 20 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 27 q1= 19 q2= 24 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 28 q1= 20 q2= 21 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id= 29 q1= 20 q2= 31 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 30 q1= 21 q2= 22 f= 6.52GHz segments=0 l=9052.39um
+[INFO]  id= 31 q1= 21 q2= 34 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 32 q1= 22 q2= 23 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 33 q1= 22 q2= 33 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 34 q1= 24 q2= 25 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id= 35 q1= 24 q2= 31 f= 6.90GHz segments=0 l=8553.85um
+[INFO]  id= 36 q1= 25 q2= 26 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 37 q1= 26 q2= 27 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 38 q1= 27 q2= 28 f= 6.85GHz segments=0 l=8616.29um
+[INFO]  id= 39 q1= 28 q2= 29 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id= 40 q1= 29 q2= 30 f= 6.92GHz segments=0 l=8529.13um
+[INFO]  id= 41 q1= 29 q2= 42 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 42 q1= 30 q2= 31 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 43 q1= 30 q2= 41 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 44 q1= 32 q2= 33 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 45 q1= 32 q2= 39 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 46 q1= 33 q2= 34 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 47 q1= 34 q2= 35 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 48 q1= 35 q2= 36 f= 6.52GHz segments=0 l=9052.39um
+[INFO]  id= 49 q1= 35 q2= 40 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id= 50 q1= 36 q2= 37 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 51 q1= 36 q2= 47 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 52 q1= 37 q2= 38 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id= 53 q1= 37 q2= 50 f= 6.75GHz segments=0 l=8743.94um
+[INFO]  id= 54 q1= 38 q2= 39 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 55 q1= 38 q2= 49 f= 6.31GHz segments=0 l=9353.66um
+[INFO]  id= 56 q1= 40 q2= 41 f= 6.14GHz segments=0 l=9612.64um
+[INFO]  id= 57 q1= 40 q2= 47 f= 6.94GHz segments=0 l=8504.55um
+[INFO]  id= 58 q1= 41 q2= 42 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id= 59 q1= 42 q2= 43 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id= 60 q1= 43 q2= 44 f= 6.39GHz segments=0 l=9236.55um
+[INFO]  id= 61 q1= 44 q2= 45 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 62 q1= 45 q2= 46 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id= 63 q1= 45 q2= 58 f= 6.80GHz segments=0 l=8679.64um
+[INFO]  id= 64 q1= 46 q2= 47 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 65 q1= 46 q2= 57 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id= 66 q1= 48 q2= 49 f= 6.79GHz segments=0 l=8692.43um
+[INFO]  id= 67 q1= 48 q2= 55 f= 6.09GHz segments=0 l=9691.56um
+[INFO]  id= 68 q1= 49 q2= 50 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 69 q1= 50 q2= 51 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id= 70 q1= 51 q2= 52 f= 6.88GHz segments=0 l=8578.72um
+[INFO]  id= 71 q1= 51 q2= 56 f= 6.13GHz segments=0 l=9628.32um
+[INFO]  id= 72 q1= 52 q2= 53 f= 6.82GHz segments=0 l=8654.19um
+[INFO]  id= 73 q1= 52 q2= 63 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 74 q1= 53 q2= 54 f= 7.00GHz segments=0 l=8431.65um
+[INFO]  id= 75 q1= 53 q2= 66 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 76 q1= 54 q2= 55 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id= 77 q1= 54 q2= 65 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 78 q1= 56 q2= 57 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 79 q1= 56 q2= 63 f= 6.56GHz segments=0 l=8997.19um
+[INFO]  id= 80 q1= 57 q2= 58 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 81 q1= 58 q2= 59 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id= 82 q1= 59 q2= 60 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id= 83 q1= 60 q2= 61 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id= 84 q1= 61 q2= 62 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 85 q1= 61 q2= 74 f= 6.92GHz segments=0 l=8529.13um
+[INFO]  id= 86 q1= 62 q2= 63 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 87 q1= 62 q2= 73 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 88 q1= 64 q2= 65 f= 6.90GHz segments=0 l=8553.85um
+[INFO]  id= 89 q1= 64 q2= 71 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 90 q1= 65 q2= 66 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 91 q1= 66 q2= 67 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 92 q1= 67 q2= 68 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id= 93 q1= 67 q2= 72 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 94 q1= 68 q2= 69 f= 6.39GHz segments=0 l=9236.55um
+[INFO]  id= 95 q1= 68 q2= 79 f= 6.16GHz segments=0 l=9581.43um
+[INFO]  id= 96 q1= 69 q2= 70 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 97 q1= 70 q2= 71 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 98 q1= 72 q2= 73 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 99 q1= 72 q2= 79 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id=100 q1= 73 q2= 74 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id=101 q1= 74 q2= 75 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id=102 q1= 75 q2= 76 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id=103 q1= 76 q2= 77 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id=104 q1= 77 q2= 78 f= 6.56GHz segments=0 l=8997.19um
+[INFO]  id=105 q1= 78 q2= 79 f= 6.61GHz segments=0 l=8929.14um
+[INFO] [Preprocessing][eagle] num_qubits=127 chip=(14900, 14900) qubits=127 couplers=144 cmap=144
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.17GHz x=    0.00 y=    0.00
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.89GHz x=    0.00 y=    0.00
+[INFO]  id=  3 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=  6 w=400.00 h=400.00 f= 5.08GHz x=    0.00 y=    0.00
+[INFO]  id=  7 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.95GHz x=    0.00 y=    0.00
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.12GHz x=    0.00 y=    0.00
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.18GHz x=    0.00 y=    0.00
+[INFO]  id= 13 w=400.00 h=400.00 f= 4.88GHz x=    0.00 y=    0.00
+[INFO]  id= 14 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id= 15 w=400.00 h=400.00 f= 5.12GHz x=    0.00 y=    0.00
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 17 w=400.00 h=400.00 f= 4.94GHz x=    0.00 y=    0.00
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 19 w=400.00 h=400.00 f= 4.92GHz x=    0.00 y=    0.00
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.17GHz x=    0.00 y=    0.00
+[INFO]  id= 21 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 22 w=400.00 h=400.00 f= 5.03GHz x=    0.00 y=    0.00
+[INFO]  id= 23 w=400.00 h=400.00 f= 4.87GHz x=    0.00 y=    0.00
+[INFO]  id= 24 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 26 w=400.00 h=400.00 f= 5.18GHz x=    0.00 y=    0.00
+[INFO]  id= 27 w=400.00 h=400.00 f= 4.89GHz x=    0.00 y=    0.00
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.09GHz x=    0.00 y=    0.00
+[INFO]  id= 29 w=400.00 h=400.00 f= 4.91GHz x=    0.00 y=    0.00
+[INFO]  id= 30 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 31 w=400.00 h=400.00 f= 5.11GHz x=    0.00 y=    0.00
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 33 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 34 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 36 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 38 w=400.00 h=400.00 f= 4.89GHz x=    0.00 y=    0.00
+[INFO]  id= 39 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 40 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 41 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 42 w=400.00 h=400.00 f= 5.08GHz x=    0.00 y=    0.00
+[INFO]  id= 43 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 44 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 45 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 46 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id= 47 w=400.00 h=400.00 f= 5.00GHz x=    0.00 y=    0.00
+[INFO]  id= 48 w=400.00 h=400.00 f= 5.00GHz x=    0.00 y=    0.00
+[INFO]  id= 49 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 50 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 51 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 52 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 53 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 54 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 55 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 56 w=400.00 h=400.00 f= 5.09GHz x=    0.00 y=    0.00
+[INFO]  id= 57 w=400.00 h=400.00 f= 4.91GHz x=    0.00 y=    0.00
+[INFO]  id= 58 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 59 w=400.00 h=400.00 f= 4.95GHz x=    0.00 y=    0.00
+[INFO]  id= 60 w=400.00 h=400.00 f= 5.17GHz x=    0.00 y=    0.00
+[INFO]  id= 61 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 62 w=400.00 h=400.00 f= 5.13GHz x=    0.00 y=    0.00
+[INFO]  id= 63 w=400.00 h=400.00 f= 5.00GHz x=    0.00 y=    0.00
+[INFO]  id= 64 w=400.00 h=400.00 f= 5.00GHz x=    0.00 y=    0.00
+[INFO]  id= 65 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id= 66 w=400.00 h=400.00 f= 4.95GHz x=    0.00 y=    0.00
+[INFO]  id= 67 w=400.00 h=400.00 f= 4.83GHz x=    0.00 y=    0.00
+[INFO]  id= 68 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id= 69 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 70 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 71 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 72 w=400.00 h=400.00 f= 4.89GHz x=    0.00 y=    0.00
+[INFO]  id= 73 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 74 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 75 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 76 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 77 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 78 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id= 79 w=400.00 h=400.00 f= 4.93GHz x=    0.00 y=    0.00
+[INFO]  id= 80 w=400.00 h=400.00 f= 5.09GHz x=    0.00 y=    0.00
+[INFO]  id= 81 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 82 w=400.00 h=400.00 f= 4.83GHz x=    0.00 y=    0.00
+[INFO]  id= 83 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 84 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 85 w=400.00 h=400.00 f= 4.91GHz x=    0.00 y=    0.00
+[INFO]  id= 86 w=400.00 h=400.00 f= 5.01GHz x=    0.00 y=    0.00
+[INFO]  id= 87 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 88 w=400.00 h=400.00 f= 5.03GHz x=    0.00 y=    0.00
+[INFO]  id= 89 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 90 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 91 w=400.00 h=400.00 f= 4.83GHz x=    0.00 y=    0.00
+[INFO]  id= 92 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 93 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 94 w=400.00 h=400.00 f= 5.08GHz x=    0.00 y=    0.00
+[INFO]  id= 95 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 96 w=400.00 h=400.00 f= 5.03GHz x=    0.00 y=    0.00
+[INFO]  id= 97 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id= 98 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 99 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=100 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=101 w=400.00 h=400.00 f= 4.91GHz x=    0.00 y=    0.00
+[INFO]  id=102 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=103 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=104 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id=105 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=106 w=400.00 h=400.00 f= 5.00GHz x=    0.00 y=    0.00
+[INFO]  id=107 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=108 w=400.00 h=400.00 f= 4.93GHz x=    0.00 y=    0.00
+[INFO]  id=109 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=110 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=111 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=112 w=400.00 h=400.00 f= 5.14GHz x=    0.00 y=    0.00
+[INFO]  id=113 w=400.00 h=400.00 f= 4.92GHz x=    0.00 y=    0.00
+[INFO]  id=114 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=115 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id=116 w=400.00 h=400.00 f= 5.15GHz x=    0.00 y=    0.00
+[INFO]  id=117 w=400.00 h=400.00 f= 5.03GHz x=    0.00 y=    0.00
+[INFO]  id=118 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=119 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO]  id=120 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=121 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=122 w=400.00 h=400.00 f= 5.16GHz x=    0.00 y=    0.00
+[INFO]  id=123 w=400.00 h=400.00 f= 4.92GHz x=    0.00 y=    0.00
+[INFO]  id=124 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id=125 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id=126 w=400.00 h=400.00 f= 4.81GHz x=    0.00 y=    0.00
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id=  1 q1=  0 q2= 14 f= 6.91GHz segments=0 l=8541.47um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=  4 q1=  3 q2=  4 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id=  5 q1=  4 q2=  5 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id=  6 q1=  4 q2= 15 f= 6.50GHz segments=0 l=9080.24um
+[INFO]  id=  7 q1=  5 q2=  6 f= 6.13GHz segments=0 l=9628.32um
+[INFO]  id=  8 q1=  6 q2=  7 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id=  9 q1=  7 q2=  8 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id= 10 q1=  8 q2=  9 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 11 q1=  8 q2= 16 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 12 q1=  9 q2= 10 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 13 q1= 10 q2= 11 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 14 q1= 11 q2= 12 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 15 q1= 12 q2= 13 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 16 q1= 12 q2= 17 f= 6.85GHz segments=0 l=8616.29um
+[INFO]  id= 17 q1= 14 q2= 18 f= 6.82GHz segments=0 l=8654.19um
+[INFO]  id= 18 q1= 15 q2= 22 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 19 q1= 16 q2= 26 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 20 q1= 17 q2= 30 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id= 21 q1= 18 q2= 19 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 22 q1= 19 q2= 20 f= 6.07GHz segments=0 l=9723.49um
+[INFO]  id= 23 q1= 20 q2= 21 f= 6.90GHz segments=0 l=8553.85um
+[INFO]  id= 24 q1= 20 q2= 33 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 25 q1= 21 q2= 22 f= 7.00GHz segments=0 l=8431.65um
+[INFO]  id= 26 q1= 22 q2= 23 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id= 27 q1= 23 q2= 24 f= 6.86GHz segments=0 l=8603.73um
+[INFO]  id= 28 q1= 24 q2= 25 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 29 q1= 24 q2= 34 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 30 q1= 25 q2= 26 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id= 31 q1= 26 q2= 27 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 32 q1= 27 q2= 28 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id= 33 q1= 28 q2= 29 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id= 34 q1= 28 q2= 35 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 35 q1= 29 q2= 30 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 36 q1= 30 q2= 31 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 37 q1= 31 q2= 32 f= 6.37GHz segments=0 l=9265.55um
+[INFO]  id= 38 q1= 32 q2= 36 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 39 q1= 33 q2= 39 f= 6.50GHz segments=0 l=9080.24um
+[INFO]  id= 40 q1= 34 q2= 43 f= 6.28GHz segments=0 l=9398.34um
+[INFO]  id= 41 q1= 35 q2= 47 f= 6.93GHz segments=0 l=8516.82um
+[INFO]  id= 42 q1= 36 q2= 51 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 43 q1= 37 q2= 38 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 44 q1= 37 q2= 52 f= 6.95GHz segments=0 l=8492.31um
+[INFO]  id= 45 q1= 38 q2= 39 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 46 q1= 39 q2= 40 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 47 q1= 40 q2= 41 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 48 q1= 41 q2= 42 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 49 q1= 41 q2= 53 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 50 q1= 42 q2= 43 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 51 q1= 43 q2= 44 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 52 q1= 44 q2= 45 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 53 q1= 45 q2= 46 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 54 q1= 45 q2= 54 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 55 q1= 46 q2= 47 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id= 56 q1= 47 q2= 48 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 57 q1= 48 q2= 49 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 58 q1= 49 q2= 50 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id= 59 q1= 49 q2= 55 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 60 q1= 50 q2= 51 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 61 q1= 52 q2= 56 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id= 62 q1= 53 q2= 60 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 63 q1= 54 q2= 64 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 64 q1= 55 q2= 68 f= 6.31GHz segments=0 l=9353.66um
+[INFO]  id= 65 q1= 56 q2= 57 f= 6.32GHz segments=0 l=9338.86um
+[INFO]  id= 66 q1= 57 q2= 58 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 67 q1= 58 q2= 59 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 68 q1= 58 q2= 71 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 69 q1= 59 q2= 60 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 70 q1= 60 q2= 61 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 71 q1= 61 q2= 62 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id= 72 q1= 62 q2= 63 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 73 q1= 62 q2= 72 f= 6.39GHz segments=0 l=9236.55um
+[INFO]  id= 74 q1= 63 q2= 64 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 75 q1= 64 q2= 65 f= 6.57GHz segments=0 l=8983.50um
+[INFO]  id= 76 q1= 65 q2= 66 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id= 77 q1= 66 q2= 67 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id= 78 q1= 66 q2= 73 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 79 q1= 67 q2= 68 f= 6.16GHz segments=0 l=9581.43um
+[INFO]  id= 80 q1= 68 q2= 69 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id= 81 q1= 69 q2= 70 f= 6.06GHz segments=0 l=9739.54um
+[INFO]  id= 82 q1= 70 q2= 74 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 83 q1= 71 q2= 77 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id= 84 q1= 72 q2= 81 f= 6.27GHz segments=0 l=9413.33um
+[INFO]  id= 85 q1= 73 q2= 85 f= 6.91GHz segments=0 l=8541.47um
+[INFO]  id= 86 q1= 74 q2= 89 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 87 q1= 75 q2= 76 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 88 q1= 75 q2= 90 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id= 89 q1= 76 q2= 77 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 90 q1= 77 q2= 78 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 91 q1= 78 q2= 79 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 92 q1= 79 q2= 80 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 93 q1= 79 q2= 91 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 94 q1= 80 q2= 81 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 95 q1= 81 q2= 82 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 96 q1= 82 q2= 83 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 97 q1= 83 q2= 84 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id= 98 q1= 83 q2= 92 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 99 q1= 84 q2= 85 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id=100 q1= 85 q2= 86 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id=101 q1= 86 q2= 87 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id=102 q1= 87 q2= 88 f= 6.97GHz segments=0 l=8467.95um
+[INFO]  id=103 q1= 87 q2= 93 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id=104 q1= 88 q2= 89 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id=105 q1= 90 q2= 94 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id=106 q1= 91 q2= 98 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id=107 q1= 92 q2=102 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id=108 q1= 93 q2=106 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=109 q1= 94 q2= 95 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id=110 q1= 95 q2= 96 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id=111 q1= 96 q2= 97 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id=112 q1= 96 q2=109 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id=113 q1= 97 q2= 98 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id=114 q1= 98 q2= 99 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id=115 q1= 99 q2=100 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id=116 q1=100 q2=101 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id=117 q1=100 q2=110 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id=118 q1=101 q2=102 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id=119 q1=102 q2=103 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id=120 q1=103 q2=104 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id=121 q1=104 q2=105 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id=122 q1=104 q2=111 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id=123 q1=105 q2=106 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id=124 q1=106 q2=107 f= 6.13GHz segments=0 l=9628.32um
+[INFO]  id=125 q1=107 q2=108 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id=126 q1=108 q2=112 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id=127 q1=109 q2=114 f= 6.93GHz segments=0 l=8516.82um
+[INFO]  id=128 q1=110 q2=118 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id=129 q1=111 q2=122 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id=130 q1=112 q2=126 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id=131 q1=113 q2=114 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id=132 q1=114 q2=115 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=133 q1=115 q2=116 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id=134 q1=116 q2=117 f= 6.97GHz segments=0 l=8467.95um
+[INFO]  id=135 q1=117 q2=118 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id=136 q1=118 q2=119 f= 6.09GHz segments=0 l=9691.56um
+[INFO]  id=137 q1=119 q2=120 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id=138 q1=120 q2=121 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=139 q1=121 q2=122 f= 6.80GHz segments=0 l=8679.64um
+[INFO]  id=140 q1=122 q2=123 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id=141 q1=123 q2=124 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id=142 q1=124 q2=125 f= 6.05GHz segments=0 l=9755.63um
+[INFO]  id=143 q1=125 q2=126 f= 6.98GHz segments=0 l=8455.81um
+[INFO] [Preprocessing][falcon] num_qubits=27 chip=(6900, 6900) qubits=27 couplers=28 cmap=28
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.17GHz x=    0.00 y=    0.00
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id=  3 w=400.00 h=400.00 f= 4.85GHz x=    0.00 y=    0.00
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.97GHz x=    0.00 y=    0.00
+[INFO]  id=  5 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.98GHz x=    0.00 y=    0.00
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.19GHz x=    0.00 y=    0.00
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.95GHz x=    0.00 y=    0.00
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.08GHz x=    0.00 y=    0.00
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.90GHz x=    0.00 y=    0.00
+[INFO]  id= 12 w=400.00 h=400.00 f= 4.94GHz x=    0.00 y=    0.00
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.18GHz x=    0.00 y=    0.00
+[INFO]  id= 14 w=400.00 h=400.00 f= 5.07GHz x=    0.00 y=    0.00
+[INFO]  id= 15 w=400.00 h=400.00 f= 4.82GHz x=    0.00 y=    0.00
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.80GHz x=    0.00 y=    0.00
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.18GHz x=    0.00 y=    0.00
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id= 19 w=400.00 h=400.00 f= 5.06GHz x=    0.00 y=    0.00
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.20GHz x=    0.00 y=    0.00
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.18GHz x=    0.00 y=    0.00
+[INFO]  id= 22 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 23 w=400.00 h=400.00 f= 4.96GHz x=    0.00 y=    0.00
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.84GHz x=    0.00 y=    0.00
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.17GHz x=    0.00 y=    0.00
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.86GHz x=    0.00 y=    0.00
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=  1 q1=  1 q2=  2 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id=  2 q1=  1 q2=  4 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id=  4 q1=  3 q2=  5 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id=  5 q1=  4 q2=  7 f= 6.56GHz segments=0 l=8997.19um
+[INFO]  id=  6 q1=  5 q2=  8 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id=  7 q1=  6 q2=  7 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id=  8 q1=  7 q2= 10 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id=  9 q1=  8 q2=  9 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 10 q1=  8 q2= 11 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 11 q1= 10 q2= 12 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 12 q1= 11 q2= 14 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id= 13 q1= 12 q2= 13 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 14 q1= 12 q2= 15 f= 6.79GHz segments=0 l=8692.43um
+[INFO]  id= 15 q1= 13 q2= 14 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 16 q1= 14 q2= 16 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id= 17 q1= 15 q2= 18 f= 6.51GHz segments=0 l=9066.30um
+[INFO]  id= 18 q1= 16 q2= 19 f= 6.41GHz segments=0 l=9207.74um
+[INFO]  id= 19 q1= 17 q2= 18 f= 6.51GHz segments=0 l=9066.30um
+[INFO]  id= 20 q1= 18 q2= 21 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id= 21 q1= 19 q2= 20 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id= 22 q1= 19 q2= 22 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 23 q1= 21 q2= 23 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 24 q1= 22 q2= 25 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 25 q1= 23 q2= 24 f= 6.35GHz segments=0 l=9294.74um
+[INFO]  id= 26 q1= 24 q2= 25 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id= 27 q1= 25 q2= 26 f= 6.21GHz segments=0 l=9504.28um
+[INFO] [FP][grid_25] num_qubits=25 chip=(7800, 7800) qubits=25 couplers=40 cmap=40
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.98GHz x= 7378.91 y= 3461.25
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.13GHz x= 6733.35 y= 4399.65
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.99GHz x= 5806.77 y= 3682.09
+[INFO]  id=  3 w=400.00 h=400.00 f= 4.85GHz x= 6497.61 y= 2695.82
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.88GHz x= 5925.48 y= 5476.78
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.14GHz x= 4987.81 y= 4731.57
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.85GHz x= 3902.01 y= 3905.68
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.15GHz x= 4743.45 y= 2819.11
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.05GHz x= 5478.79 y= 1899.50
+[INFO]  id=  9 w=400.00 h=400.00 f= 5.08GHz x= 5096.55 y= 6510.31
+[INFO]  id= 10 w=400.00 h=400.00 f= 4.93GHz x= 4141.71 y= 5823.55
+[INFO]  id= 11 w=400.00 h=400.00 f= 5.11GHz x= 3061.53 y= 4954.26
+[INFO]  id= 12 w=400.00 h=400.00 f= 4.91GHz x= 1990.08 y= 4154.10
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.16GHz x= 2813.99 y= 3053.84
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.81GHz x= 3661.28 y= 1999.95
+[INFO]  id= 15 w=400.00 h=400.00 f= 4.93GHz x= 4403.91 y= 1065.25
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.83GHz x= 4333.81 y= 7400.00
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.09GHz x= 3382.52 y= 6702.47
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.90GHz x= 2339.76 y= 5924.14
+[INFO]  id= 19 w=400.00 h=400.00 f= 5.09GHz x= 1289.15 y= 5084.72
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.20GHz x=  435.09 y= 4330.75
+[INFO]  id= 21 w=400.00 h=400.00 f= 4.81GHz x= 1088.90 y= 3347.17
+[INFO]  id= 22 w=400.00 h=400.00 f= 4.92GHz x= 1869.64 y= 2321.69
+[INFO]  id= 23 w=400.00 h=400.00 f= 5.19GHz x= 2693.41 y= 1300.16
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.97GHz x= 3444.50 y=  456.18
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id=  1 q1=  0 q2=  3 f= 6.93GHz segments=0 l=8516.82um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.32GHz segments=0 l=9338.86um
+[INFO]  id=  3 q1=  1 q2=  4 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id=  4 q1=  2 q2=  3 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id=  5 q1=  2 q2=  5 f= 6.57GHz segments=0 l=8983.50um
+[INFO]  id=  6 q1=  2 q2=  7 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id=  7 q1=  3 q2=  8 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id=  8 q1=  4 q2=  5 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=  9 q1=  4 q2=  9 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 10 q1=  5 q2=  6 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id= 11 q1=  5 q2= 10 f= 6.88GHz segments=0 l=8578.72um
+[INFO]  id= 12 q1=  6 q2=  7 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 13 q1=  6 q2= 11 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id= 14 q1=  6 q2= 13 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 15 q1=  7 q2=  8 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 16 q1=  7 q2= 14 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 17 q1=  8 q2= 15 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 18 q1=  9 q2= 10 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 19 q1=  9 q2= 16 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id= 20 q1= 10 q2= 11 f= 6.32GHz segments=0 l=9338.86um
+[INFO]  id= 21 q1= 10 q2= 17 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 22 q1= 11 q2= 12 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 23 q1= 11 q2= 18 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 24 q1= 12 q2= 13 f= 6.80GHz segments=0 l=8679.64um
+[INFO]  id= 25 q1= 12 q2= 19 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 26 q1= 12 q2= 21 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 27 q1= 13 q2= 14 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 28 q1= 13 q2= 22 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 29 q1= 14 q2= 15 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 30 q1= 14 q2= 23 f= 6.05GHz segments=0 l=9755.63um
+[INFO]  id= 31 q1= 15 q2= 24 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 32 q1= 16 q2= 17 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 33 q1= 17 q2= 18 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id= 34 q1= 18 q2= 19 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id= 35 q1= 19 q2= 20 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 36 q1= 20 q2= 21 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 37 q1= 21 q2= 22 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id= 38 q1= 22 q2= 23 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 39 q1= 23 q2= 24 f= 6.37GHz segments=0 l=9265.55um
+[INFO] [FP][xtree_53] num_qubits=53 chip=(9300, 9300) qubits=53 couplers=52 cmap=52
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.98GHz x= 4622.31 y= 4640.10
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.01GHz x= 4590.42 y= 3065.78
+[INFO]  id=  2 w=400.00 h=400.00 f= 5.01GHz x= 3035.61 y= 4661.09
+[INFO]  id=  3 w=400.00 h=400.00 f= 4.80GHz x= 4644.04 y= 6002.96
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.94GHz x= 6388.42 y= 4644.76
+[INFO]  id=  5 w=400.00 h=400.00 f= 4.80GHz x= 5458.11 y= 2906.26
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.80GHz x= 5590.87 y= 1832.99
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.16GHz x= 3550.36 y= 1771.53
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.16GHz x= 3573.88 y= 3874.20
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.84GHz x= 1769.53 y= 4286.96
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.16GHz x= 1752.15 y= 5322.05
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.84GHz x= 3644.04 y= 6273.72
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.16GHz x= 4080.11 y= 7476.60
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.20GHz x= 5167.36 y= 7173.46
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.84GHz x= 6547.04 y= 5737.68
+[INFO]  id= 15 w=400.00 h=400.00 f= 4.84GHz x= 7592.64 y= 5521.48
+[INFO]  id= 16 w=400.00 h=400.00 f= 5.02GHz x= 7545.07 y= 3904.28
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.20GHz x= 6481.27 y= 3311.68
+[INFO]  id= 18 w=400.00 h=400.00 f= 5.20GHz x= 5406.01 y= 3990.49
+[INFO]  id= 19 w=400.00 h=400.00 f= 5.20GHz x= 6537.86 y= 2313.71
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.19GHz x= 6510.82 y= 1214.61
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.12GHz x= 5754.79 y=  651.38
+[INFO]  id= 22 w=400.00 h=400.00 f= 5.20GHz x= 4795.53 y=  761.16
+[INFO]  id= 23 w=400.00 h=400.00 f= 4.80GHz x= 4497.07 y= 1838.90
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.85GHz x= 3430.43 y=  627.29
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.06GHz x= 2460.35 y= 1485.91
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.86GHz x= 3465.68 y= 2936.32
+[INFO]  id= 27 w=400.00 h=400.00 f= 4.80GHz x= 2538.74 y= 2733.66
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.01GHz x= 2571.80 y= 3788.23
+[INFO]  id= 29 w=400.00 h=400.00 f= 5.20GHz x= 1512.30 y= 3027.05
+[INFO]  id= 30 w=400.00 h=400.00 f= 4.84GHz x=  580.37 y= 3621.38
+[INFO]  id= 31 w=400.00 h=400.00 f= 5.11GHz x=  546.39 y= 4572.65
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.98GHz x=  454.18 y= 5652.25
+[INFO]  id= 33 w=400.00 h=400.00 f= 4.80GHz x=  954.58 y= 6483.03
+[INFO]  id= 34 w=400.00 h=400.00 f= 4.81GHz x= 1896.46 y= 6385.83
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.20GHz x= 2720.04 y= 5688.16
+[INFO]  id= 36 w=400.00 h=400.00 f= 5.20GHz x= 3872.99 y= 5292.93
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.20GHz x= 2904.35 y= 6900.57
+[INFO]  id= 38 w=400.00 h=400.00 f= 4.96GHz x= 2853.89 y= 7925.53
+[INFO]  id= 39 w=400.00 h=400.00 f= 5.20GHz x= 3390.12 y= 8595.68
+[INFO]  id= 40 w=400.00 h=400.00 f= 4.80GHz x= 4275.26 y= 8750.24
+[INFO]  id= 41 w=400.00 h=400.00 f= 4.97GHz x= 5099.55 y= 8423.88
+[INFO]  id= 42 w=400.00 h=400.00 f= 4.80GHz x= 6125.25 y= 8150.78
+[INFO]  id= 43 w=400.00 h=400.00 f= 4.82GHz x= 6384.38 y= 7117.98
+[INFO]  id= 44 w=400.00 h=400.00 f= 5.07GHz x= 5674.78 y= 5139.32
+[INFO]  id= 45 w=400.00 h=400.00 f= 5.07GHz x= 5666.60 y= 6230.91
+[INFO]  id= 46 w=400.00 h=400.00 f= 5.20GHz x= 7228.24 y= 6813.94
+[INFO]  id= 47 w=400.00 h=400.00 f= 5.20GHz x= 8149.16 y= 6548.57
+[INFO]  id= 48 w=400.00 h=400.00 f= 5.20GHz x= 8237.02 y= 4820.77
+[INFO]  id= 49 w=400.00 h=400.00 f= 4.95GHz x= 8791.47 y= 5759.91
+[INFO]  id= 50 w=400.00 h=400.00 f= 5.04GHz x= 8900.00 y= 4031.54
+[INFO]  id= 51 w=400.00 h=400.00 f= 4.96GHz x= 8588.50 y= 2962.47
+[INFO]  id= 52 w=400.00 h=400.00 f= 5.20GHz x= 7641.80 y= 2805.33
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id=  1 q1=  0 q2=  2 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id=  2 q1=  0 q2=  3 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id=  3 q1=  0 q2=  4 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id=  4 q1=  1 q2=  5 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id=  5 q1=  1 q2=  6 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=  6 q1=  1 q2=  7 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id=  7 q1=  2 q2=  8 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id=  8 q1=  2 q2=  9 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id=  9 q1=  2 q2= 10 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 10 q1=  3 q2= 11 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id= 11 q1=  3 q2= 12 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id= 12 q1=  3 q2= 13 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 13 q1=  4 q2= 14 f= 6.74GHz segments=0 l=8756.91um
+[INFO]  id= 14 q1=  4 q2= 15 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 15 q1=  4 q2= 16 f= 6.86GHz segments=0 l=8603.73um
+[INFO]  id= 16 q1=  5 q2= 17 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 17 q1=  5 q2= 18 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id= 18 q1=  5 q2= 19 f= 6.52GHz segments=0 l=9052.39um
+[INFO]  id= 19 q1=  6 q2= 20 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 20 q1=  6 q2= 21 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 21 q1=  6 q2= 22 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 22 q1=  7 q2= 23 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 23 q1=  7 q2= 24 f= 6.35GHz segments=0 l=9294.74um
+[INFO]  id= 24 q1=  7 q2= 25 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 25 q1=  8 q2= 26 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id= 26 q1=  8 q2= 27 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 27 q1=  8 q2= 28 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id= 28 q1=  9 q2= 29 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 29 q1=  9 q2= 30 f= 6.06GHz segments=0 l=9739.54um
+[INFO]  id= 30 q1=  9 q2= 31 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 31 q1= 10 q2= 32 f= 6.50GHz segments=0 l=9080.24um
+[INFO]  id= 32 q1= 10 q2= 33 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 33 q1= 10 q2= 34 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id= 34 q1= 11 q2= 35 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id= 35 q1= 11 q2= 36 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 36 q1= 11 q2= 37 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id= 37 q1= 12 q2= 38 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 38 q1= 12 q2= 39 f= 6.61GHz segments=0 l=8929.14um
+[INFO]  id= 39 q1= 12 q2= 40 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id= 40 q1= 13 q2= 41 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 41 q1= 13 q2= 42 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id= 42 q1= 13 q2= 43 f= 6.28GHz segments=0 l=9398.34um
+[INFO]  id= 43 q1= 14 q2= 44 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 44 q1= 14 q2= 45 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id= 45 q1= 14 q2= 46 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 46 q1= 15 q2= 47 f= 6.00GHz segments=0 l=9836.93um
+[INFO]  id= 47 q1= 15 q2= 48 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id= 48 q1= 15 q2= 49 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 49 q1= 16 q2= 50 f= 6.75GHz segments=0 l=8743.94um
+[INFO]  id= 50 q1= 16 q2= 51 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 51 q1= 16 q2= 52 f= 6.24GHz segments=0 l=9458.59um
+[INFO] [FP][aspen_11] num_qubits=40 chip=(9995.8, 9995.8) qubits=40 couplers=48 cmap=48
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.88GHz x= 9267.81 y= 4934.92
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.19GHz x= 9595.80 y= 6115.59
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.90GHz x= 9545.69 y= 8683.20
+[INFO]  id=  3 w=400.00 h=400.00 f= 5.11GHz x= 9184.74 y= 9584.66
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.82GHz x= 8726.91 y= 9242.25
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.06GHz x= 8285.08 y= 8158.73
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.94GHz x= 8336.50 y= 5555.45
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.19GHz x= 8808.17 y= 4897.97
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.14GHz x= 7323.45 y= 4369.04
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.82GHz x= 7810.43 y= 5327.40
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.19GHz x= 7763.94 y= 7908.71
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.88GHz x= 7265.88 y= 8398.39
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.02GHz x= 6741.22 y= 8093.15
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.20GHz x= 6259.35 y= 7112.57
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.85GHz x= 6286.24 y= 4535.35
+[INFO]  id= 15 w=400.00 h=400.00 f= 5.00GHz x= 6790.04 y= 4111.72
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.81GHz x= 5309.02 y= 3075.67
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.14GHz x= 5766.76 y= 4194.62
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.85GHz x= 5734.60 y= 6811.43
+[INFO]  id= 19 w=400.00 h=400.00 f= 4.96GHz x= 5251.53 y= 7291.30
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.20GHz x= 4732.14 y= 6952.29
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.08GHz x= 4244.86 y= 5867.27
+[INFO]  id= 22 w=400.00 h=400.00 f= 4.82GHz x= 4288.44 y= 3131.77
+[INFO]  id= 23 w=400.00 h=400.00 f= 5.11GHz x= 4794.08 y= 2703.00
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.85GHz x= 3251.80 y= 1829.12
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.13GHz x= 3748.09 y= 2842.98
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.82GHz x= 3700.84 y= 5423.00
+[INFO]  id= 27 w=400.00 h=400.00 f= 5.19GHz x= 3173.81 y= 5902.77
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.06GHz x= 2648.05 y= 5558.14
+[INFO]  id= 29 w=400.00 h=400.00 f= 4.95GHz x= 2157.69 y= 4640.47
+[INFO]  id= 30 w=400.00 h=400.00 f= 4.81GHz x= 2208.91 y= 1956.10
+[INFO]  id= 31 w=400.00 h=400.00 f= 5.11GHz x= 2716.59 y= 1535.55
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.83GHz x= 1230.56 y=  677.41
+[INFO]  id= 33 w=400.00 h=400.00 f= 5.13GHz x= 1691.09 y= 1809.71
+[INFO]  id= 34 w=400.00 h=400.00 f= 4.80GHz x= 1661.77 y= 4416.26
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.13GHz x= 1188.11 y= 5221.26
+[INFO]  id= 36 w=400.00 h=400.00 f= 4.88GHz x=  753.63 y= 5214.17
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.02GHz x=  422.11 y= 3936.32
+[INFO]  id= 38 w=400.00 h=400.00 f= 5.19GHz x=  451.18 y= 1485.31
+[INFO]  id= 39 w=400.00 h=400.00 f= 4.95GHz x=  799.12 y=  410.97
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id=  1 q1=  0 q2=  7 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=  4 q1=  3 q2=  4 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id=  5 q1=  4 q2=  5 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id=  6 q1=  5 q2=  6 f= 6.37GHz segments=0 l=9265.55um
+[INFO]  id=  7 q1=  5 q2= 10 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id=  8 q1=  6 q2=  7 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id=  9 q1=  6 q2=  9 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 10 q1=  8 q2=  9 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 11 q1=  8 q2= 15 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 12 q1=  9 q2= 10 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 13 q1= 10 q2= 11 f= 7.00GHz segments=0 l=8431.65um
+[INFO]  id= 14 q1= 11 q2= 12 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 15 q1= 12 q2= 13 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 16 q1= 13 q2= 14 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 17 q1= 13 q2= 18 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 18 q1= 14 q2= 15 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 19 q1= 14 q2= 17 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 20 q1= 16 q2= 17 f= 6.09GHz segments=0 l=9691.56um
+[INFO]  id= 21 q1= 16 q2= 23 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id= 22 q1= 17 q2= 18 f= 6.37GHz segments=0 l=9265.55um
+[INFO]  id= 23 q1= 18 q2= 19 f= 6.57GHz segments=0 l=8983.50um
+[INFO]  id= 24 q1= 19 q2= 20 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 25 q1= 20 q2= 21 f= 6.31GHz segments=0 l=9353.66um
+[INFO]  id= 26 q1= 21 q2= 22 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 27 q1= 21 q2= 26 f= 6.75GHz segments=0 l=8743.94um
+[INFO]  id= 28 q1= 22 q2= 23 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 29 q1= 22 q2= 25 f= 6.94GHz segments=0 l=8504.55um
+[INFO]  id= 30 q1= 24 q2= 25 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 31 q1= 24 q2= 31 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id= 32 q1= 25 q2= 26 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 33 q1= 26 q2= 27 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id= 34 q1= 27 q2= 28 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 35 q1= 28 q2= 29 f= 6.91GHz segments=0 l=8541.47um
+[INFO]  id= 36 q1= 29 q2= 30 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 37 q1= 29 q2= 34 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id= 38 q1= 30 q2= 31 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 39 q1= 30 q2= 33 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 40 q1= 32 q2= 33 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 41 q1= 32 q2= 39 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 42 q1= 33 q2= 34 f= 6.35GHz segments=0 l=9294.74um
+[INFO]  id= 43 q1= 34 q2= 35 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 44 q1= 35 q2= 36 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 45 q1= 36 q2= 37 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id= 46 q1= 37 q2= 38 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id= 47 q1= 38 q2= 39 f= 6.05GHz segments=0 l=9755.63um
+[INFO] [FP][aspen_m] num_qubits=80 chip=(12900, 12900) qubits=80 couplers=106 cmap=106
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.80GHz x=  961.56 y=12490.60
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.09GHz x=  542.05 y=11611.00
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.85GHz x=  522.55 y= 9988.88
+[INFO]  id=  3 w=400.00 h=400.00 f= 5.15GHz x=  837.49 y= 8404.30
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.93GHz x= 1421.86 y= 8446.41
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.20GHz x= 2007.84 y= 9694.65
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.80GHz x= 2074.42 y=11486.60
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.16GHz x= 1493.36 y=12318.29
+[INFO]  id=  8 w=400.00 h=400.00 f= 4.92GHz x=  808.79 y= 6628.37
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.85GHz x=  451.06 y= 5142.95
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.12GHz x=  400.00 y= 3539.47
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.80GHz x=  762.86 y= 2530.16
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.20GHz x= 1308.17 y= 2596.52
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.07GHz x= 1898.10 y= 3198.53
+[INFO]  id= 14 w=400.00 h=400.00 f= 4.80GHz x= 1924.52 y= 5040.81
+[INFO]  id= 15 w=400.00 h=400.00 f= 5.20GHz x= 1373.15 y= 6447.26
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.81GHz x= 3409.49 y=11833.29
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.20GHz x= 2716.78 y=11360.73
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.80GHz x= 2691.52 y= 9558.19
+[INFO]  id= 19 w=400.00 h=400.00 f= 4.96GHz x= 3303.28 y= 8184.60
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.15GHz x= 4028.31 y= 8017.88
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.10GHz x= 4726.94 y= 9135.25
+[INFO]  id= 22 w=400.00 h=400.00 f= 5.10GHz x= 4778.12 y=10936.65
+[INFO]  id= 23 w=400.00 h=400.00 f= 5.14GHz x= 4085.83 y=11679.53
+[INFO]  id= 24 w=400.00 h=400.00 f= 5.09GHz x= 3281.67 y= 6164.74
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.14GHz x= 2598.03 y= 4973.08
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.83GHz x= 2552.27 y= 3149.56
+[INFO]  id= 27 w=400.00 h=400.00 f= 5.07GHz x= 3218.70 y= 2412.82
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.20GHz x= 3896.21 y= 2313.01
+[INFO]  id= 29 w=400.00 h=400.00 f= 4.86GHz x= 4612.43 y= 2786.03
+[INFO]  id= 30 w=400.00 h=400.00 f= 5.10GHz x= 4646.28 y= 4591.05
+[INFO]  id= 31 w=400.00 h=400.00 f= 4.82GHz x= 3985.25 y= 6018.02
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.80GHz x= 6195.31 y=11200.76
+[INFO]  id= 33 w=400.00 h=400.00 f= 5.20GHz x= 5481.23 y=10787.25
+[INFO]  id= 34 w=400.00 h=400.00 f= 5.01GHz x= 5457.98 y= 8962.40
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.20GHz x= 6098.35 y= 7556.98
+[INFO]  id= 36 w=400.00 h=400.00 f= 4.81GHz x= 6838.91 y= 7367.37
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.20GHz x= 7531.44 y= 8404.57
+[INFO]  id= 38 w=400.00 h=400.00 f= 4.90GHz x= 7567.56 y=10238.91
+[INFO]  id= 39 w=400.00 h=400.00 f= 5.19GHz x= 6878.14 y=11018.99
+[INFO]  id= 40 w=400.00 h=400.00 f= 4.82GHz x= 6074.45 y= 5536.09
+[INFO]  id= 41 w=400.00 h=400.00 f= 5.20GHz x= 5364.82 y= 4438.79
+[INFO]  id= 42 w=400.00 h=400.00 f= 5.06GHz x= 5313.66 y= 2624.88
+[INFO]  id= 43 w=400.00 h=400.00 f= 4.96GHz x= 6004.23 y= 1861.37
+[INFO]  id= 44 w=400.00 h=400.00 f= 4.80GHz x= 6698.74 y= 1690.17
+[INFO]  id= 45 w=400.00 h=400.00 f= 5.17GHz x= 7427.52 y= 2104.08
+[INFO]  id= 46 w=400.00 h=400.00 f= 4.86GHz x= 7446.33 y= 3945.58
+[INFO]  id= 47 w=400.00 h=400.00 f= 5.10GHz x= 6798.50 y= 5310.53
+[INFO]  id= 48 w=400.00 h=400.00 f= 5.07GHz x= 8975.94 y=10508.87
+[INFO]  id= 49 w=400.00 h=400.00 f= 5.18GHz x= 8269.96 y=10035.43
+[INFO]  id= 50 w=400.00 h=400.00 f= 4.90GHz x= 8274.44 y= 8266.28
+[INFO]  id= 51 w=400.00 h=400.00 f= 4.80GHz x= 8930.13 y= 6856.79
+[INFO]  id= 52 w=400.00 h=400.00 f= 5.20GHz x= 9643.96 y= 6743.91
+[INFO]  id= 53 w=400.00 h=400.00 f= 4.80GHz x=10297.22 y= 7885.27
+[INFO]  id= 54 w=400.00 h=400.00 f= 5.00GHz x=10315.74 y= 9720.14
+[INFO]  id= 55 w=400.00 h=400.00 f= 4.81GHz x= 9668.20 y=10389.18
+[INFO]  id= 56 w=400.00 h=400.00 f= 5.02GHz x= 8885.65 y= 4880.05
+[INFO]  id= 57 w=400.00 h=400.00 f= 5.16GHz x= 8187.38 y= 3772.27
+[INFO]  id= 58 w=400.00 h=400.00 f= 5.02GHz x= 8147.48 y= 1946.71
+[INFO]  id= 59 w=400.00 h=400.00 f= 4.89GHz x= 8826.20 y= 1239.76
+[INFO]  id= 60 w=400.00 h=400.00 f= 5.10GHz x= 9531.22 y= 1071.89
+[INFO]  id= 61 w=400.00 h=400.00 f= 4.80GHz x=10202.78 y= 1525.59
+[INFO]  id= 62 w=400.00 h=400.00 f= 5.20GHz x=10239.67 y= 3375.43
+[INFO]  id= 63 w=400.00 h=400.00 f= 4.84GHz x= 9615.94 y= 4721.76
+[INFO]  id= 64 w=400.00 h=400.00 f= 4.80GHz x=11535.93 y=10360.39
+[INFO]  id= 65 w=400.00 h=400.00 f= 5.13GHz x=10958.95 y= 9645.26
+[INFO]  id= 66 w=400.00 h=400.00 f= 5.05GHz x=10971.98 y= 7886.96
+[INFO]  id= 67 w=400.00 h=400.00 f= 4.82GHz x=11517.43 y= 6437.11
+[INFO]  id= 68 w=400.00 h=400.00 f= 5.14GHz x=12087.42 y= 6324.05
+[INFO]  id= 69 w=400.00 h=400.00 f= 4.84GHz x=12431.83 y= 7855.89
+[INFO]  id= 70 w=400.00 h=400.00 f= 5.19GHz x=12464.10 y= 9475.93
+[INFO]  id= 71 w=400.00 h=400.00 f= 4.99GHz x=12075.91 y=10403.32
+[INFO]  id= 72 w=400.00 h=400.00 f= 5.19GHz x=11492.16 y= 4517.66
+[INFO]  id= 73 w=400.00 h=400.00 f= 4.80GHz x=10911.42 y= 3195.01
+[INFO]  id= 74 w=400.00 h=400.00 f= 5.20GHz x=10858.90 y= 1462.18
+[INFO]  id= 75 w=400.00 h=400.00 f= 4.80GHz x=11427.82 y=  626.90
+[INFO]  id= 76 w=400.00 h=400.00 f= 5.20GHz x=11968.72 y=  426.50
+[INFO]  id= 77 w=400.00 h=400.00 f= 4.80GHz x=12361.69 y= 1291.08
+[INFO]  id= 78 w=400.00 h=400.00 f= 5.20GHz x=12365.82 y= 2907.87
+[INFO]  id= 79 w=400.00 h=400.00 f= 4.80GHz x=12061.95 y= 4516.62
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.27GHz segments=0 l=9413.33um
+[INFO]  id=  1 q1=  0 q2=  7 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.28GHz segments=0 l=9398.34um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.07GHz segments=0 l=9723.49um
+[INFO]  id=  4 q1=  3 q2=  4 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id=  5 q1=  3 q2=  8 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id=  6 q1=  4 q2=  5 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id=  7 q1=  4 q2= 15 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id=  8 q1=  5 q2=  6 f= 6.22GHz segments=0 l=9489.00um
+[INFO]  id=  9 q1=  5 q2= 18 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id= 10 q1=  6 q2=  7 f= 6.05GHz segments=0 l=9755.63um
+[INFO]  id= 11 q1=  6 q2= 17 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 12 q1=  8 q2=  9 f= 6.95GHz segments=0 l=8492.31um
+[INFO]  id= 13 q1=  8 q2= 15 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 14 q1=  9 q2= 10 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id= 15 q1= 10 q2= 11 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 16 q1= 11 q2= 12 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id= 17 q1= 12 q2= 13 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id= 18 q1= 13 q2= 14 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 19 q1= 13 q2= 26 f= 6.85GHz segments=0 l=8616.29um
+[INFO]  id= 20 q1= 14 q2= 15 f= 6.03GHz segments=0 l=9787.99um
+[INFO]  id= 21 q1= 14 q2= 25 f= 6.97GHz segments=0 l=8467.95um
+[INFO]  id= 22 q1= 16 q2= 17 f= 6.00GHz segments=0 l=9836.93um
+[INFO]  id= 23 q1= 16 q2= 23 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 24 q1= 17 q2= 18 f= 6.16GHz segments=0 l=9581.43um
+[INFO]  id= 25 q1= 18 q2= 19 f= 6.82GHz segments=0 l=8654.19um
+[INFO]  id= 26 q1= 19 q2= 20 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 27 q1= 19 q2= 24 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 28 q1= 20 q2= 21 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id= 29 q1= 20 q2= 31 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 30 q1= 21 q2= 22 f= 6.52GHz segments=0 l=9052.39um
+[INFO]  id= 31 q1= 21 q2= 34 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 32 q1= 22 q2= 23 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 33 q1= 22 q2= 33 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 34 q1= 24 q2= 25 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id= 35 q1= 24 q2= 31 f= 6.90GHz segments=0 l=8553.85um
+[INFO]  id= 36 q1= 25 q2= 26 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 37 q1= 26 q2= 27 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 38 q1= 27 q2= 28 f= 6.85GHz segments=0 l=8616.29um
+[INFO]  id= 39 q1= 28 q2= 29 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id= 40 q1= 29 q2= 30 f= 6.92GHz segments=0 l=8529.13um
+[INFO]  id= 41 q1= 29 q2= 42 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 42 q1= 30 q2= 31 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 43 q1= 30 q2= 41 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 44 q1= 32 q2= 33 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 45 q1= 32 q2= 39 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 46 q1= 33 q2= 34 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 47 q1= 34 q2= 35 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 48 q1= 35 q2= 36 f= 6.52GHz segments=0 l=9052.39um
+[INFO]  id= 49 q1= 35 q2= 40 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id= 50 q1= 36 q2= 37 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 51 q1= 36 q2= 47 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 52 q1= 37 q2= 38 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id= 53 q1= 37 q2= 50 f= 6.75GHz segments=0 l=8743.94um
+[INFO]  id= 54 q1= 38 q2= 39 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 55 q1= 38 q2= 49 f= 6.31GHz segments=0 l=9353.66um
+[INFO]  id= 56 q1= 40 q2= 41 f= 6.14GHz segments=0 l=9612.64um
+[INFO]  id= 57 q1= 40 q2= 47 f= 6.94GHz segments=0 l=8504.55um
+[INFO]  id= 58 q1= 41 q2= 42 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id= 59 q1= 42 q2= 43 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id= 60 q1= 43 q2= 44 f= 6.39GHz segments=0 l=9236.55um
+[INFO]  id= 61 q1= 44 q2= 45 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 62 q1= 45 q2= 46 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id= 63 q1= 45 q2= 58 f= 6.80GHz segments=0 l=8679.64um
+[INFO]  id= 64 q1= 46 q2= 47 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 65 q1= 46 q2= 57 f= 6.58GHz segments=0 l=8969.85um
+[INFO]  id= 66 q1= 48 q2= 49 f= 6.79GHz segments=0 l=8692.43um
+[INFO]  id= 67 q1= 48 q2= 55 f= 6.09GHz segments=0 l=9691.56um
+[INFO]  id= 68 q1= 49 q2= 50 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 69 q1= 50 q2= 51 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id= 70 q1= 51 q2= 52 f= 6.88GHz segments=0 l=8578.72um
+[INFO]  id= 71 q1= 51 q2= 56 f= 6.13GHz segments=0 l=9628.32um
+[INFO]  id= 72 q1= 52 q2= 53 f= 6.82GHz segments=0 l=8654.19um
+[INFO]  id= 73 q1= 52 q2= 63 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 74 q1= 53 q2= 54 f= 7.00GHz segments=0 l=8431.65um
+[INFO]  id= 75 q1= 53 q2= 66 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 76 q1= 54 q2= 55 f= 6.70GHz segments=0 l=8809.19um
+[INFO]  id= 77 q1= 54 q2= 65 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 78 q1= 56 q2= 57 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 79 q1= 56 q2= 63 f= 6.56GHz segments=0 l=8997.19um
+[INFO]  id= 80 q1= 57 q2= 58 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 81 q1= 58 q2= 59 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id= 82 q1= 59 q2= 60 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id= 83 q1= 60 q2= 61 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id= 84 q1= 61 q2= 62 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 85 q1= 61 q2= 74 f= 6.92GHz segments=0 l=8529.13um
+[INFO]  id= 86 q1= 62 q2= 63 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 87 q1= 62 q2= 73 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 88 q1= 64 q2= 65 f= 6.90GHz segments=0 l=8553.85um
+[INFO]  id= 89 q1= 64 q2= 71 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 90 q1= 65 q2= 66 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 91 q1= 66 q2= 67 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 92 q1= 67 q2= 68 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id= 93 q1= 67 q2= 72 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 94 q1= 68 q2= 69 f= 6.39GHz segments=0 l=9236.55um
+[INFO]  id= 95 q1= 68 q2= 79 f= 6.16GHz segments=0 l=9581.43um
+[INFO]  id= 96 q1= 69 q2= 70 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 97 q1= 70 q2= 71 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 98 q1= 72 q2= 73 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 99 q1= 72 q2= 79 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id=100 q1= 73 q2= 74 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id=101 q1= 74 q2= 75 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id=102 q1= 75 q2= 76 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id=103 q1= 76 q2= 77 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id=104 q1= 77 q2= 78 f= 6.56GHz segments=0 l=8997.19um
+[INFO]  id=105 q1= 78 q2= 79 f= 6.61GHz segments=0 l=8929.14um
+[INFO] [FP][eagle] num_qubits=127 chip=(14900, 14900) qubits=127 couplers=144 cmap=144
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.81GHz x=  767.20 y=13573.53
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.17GHz x=  461.68 y=12963.56
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.89GHz x=  413.84 y=12065.85
+[INFO]  id=  3 w=400.00 h=400.00 f= 5.11GHz x=  579.10 y=11121.19
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.81GHz x=  886.24 y=10202.21
+[INFO]  id=  5 w=400.00 h=400.00 f= 5.20GHz x=  693.94 y= 9103.85
+[INFO]  id=  6 w=400.00 h=400.00 f= 5.08GHz x=  659.01 y= 7948.14
+[INFO]  id=  7 w=400.00 h=400.00 f= 4.84GHz x=  782.42 y= 6805.88
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.20GHz x= 1050.65 y= 5735.17
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.95GHz x=  842.49 y= 4652.14
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.12GHz x=  787.64 y= 3566.20
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.80GHz x=  916.54 y= 2557.76
+[INFO]  id= 12 w=400.00 h=400.00 f= 5.18GHz x= 1229.31 y= 1744.05
+[INFO]  id= 13 w=400.00 h=400.00 f= 4.88GHz x=  939.95 y= 1218.44
+[INFO]  id= 14 w=400.00 h=400.00 f= 5.11GHz x= 1217.03 y=13738.47
+[INFO]  id= 15 w=400.00 h=400.00 f= 5.12GHz x= 1471.24 y=10344.95
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.80GHz x= 1642.35 y= 5747.18
+[INFO]  id= 17 w=400.00 h=400.00 f= 4.94GHz x= 1778.88 y= 1562.67
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.80GHz x= 1719.47 y=13556.65
+[INFO]  id= 19 w=400.00 h=400.00 f= 4.92GHz x= 2243.11 y=13125.81
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.17GHz x= 2779.05 y=12500.38
+[INFO]  id= 21 w=400.00 h=400.00 f= 4.81GHz x= 2402.23 y=11508.00
+[INFO]  id= 22 w=400.00 h=400.00 f= 5.03GHz x= 2100.45 y=10390.73
+[INFO]  id= 23 w=400.00 h=400.00 f= 4.87GHz x= 2497.05 y= 9308.14
+[INFO]  id= 24 w=400.00 h=400.00 f= 5.19GHz x= 2935.42 y= 8231.37
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.06GHz x= 2578.40 y= 7033.56
+[INFO]  id= 26 w=400.00 h=400.00 f= 5.18GHz x= 2277.30 y= 5804.44
+[INFO]  id= 27 w=400.00 h=400.00 f= 4.89GHz x= 2652.46 y= 4675.81
+[INFO]  id= 28 w=400.00 h=400.00 f= 5.09GHz x= 3088.69 y= 3632.32
+[INFO]  id= 29 w=400.00 h=400.00 f= 4.91GHz x= 2714.79 y= 2601.32
+[INFO]  id= 30 w=400.00 h=400.00 f= 4.81GHz x= 2376.85 y= 1625.01
+[INFO]  id= 31 w=400.00 h=400.00 f= 5.11GHz x= 2795.14 y=  899.76
+[INFO]  id= 32 w=400.00 h=400.00 f= 4.80GHz x= 3301.31 y=  485.23
+[INFO]  id= 33 w=400.00 h=400.00 f= 4.80GHz x= 3520.19 y=12620.42
+[INFO]  id= 34 w=400.00 h=400.00 f= 4.80GHz x= 3680.73 y= 8304.30
+[INFO]  id= 35 w=400.00 h=400.00 f= 5.20GHz x= 3818.60 y= 3631.12
+[INFO]  id= 36 w=400.00 h=400.00 f= 5.20GHz x= 3854.53 y=  403.85
+[INFO]  id= 37 w=400.00 h=400.00 f= 5.06GHz x= 5373.78 y=13724.80
+[INFO]  id= 38 w=400.00 h=400.00 f= 4.89GHz x= 4800.42 y=13273.88
+[INFO]  id= 39 w=400.00 h=400.00 f= 5.19GHz x= 4280.38 y=12577.95
+[INFO]  id= 40 w=400.00 h=400.00 f= 4.80GHz x= 4775.96 y=11688.45
+[INFO]  id= 41 w=400.00 h=400.00 f= 5.20GHz x= 5276.45 y=10719.13
+[INFO]  id= 42 w=400.00 h=400.00 f= 5.08GHz x= 4845.45 y= 9562.17
+[INFO]  id= 43 w=400.00 h=400.00 f= 5.19GHz x= 4445.45 y= 8348.66
+[INFO]  id= 44 w=400.00 h=400.00 f= 4.81GHz x= 4913.95 y= 7203.53
+[INFO]  id= 45 w=400.00 h=400.00 f= 5.20GHz x= 5402.80 y= 6073.31
+[INFO]  id= 46 w=400.00 h=400.00 f= 5.07GHz x= 4978.26 y= 4882.01
+[INFO]  id= 47 w=400.00 h=400.00 f= 5.00GHz x= 4563.63 y= 3721.60
+[INFO]  id= 48 w=400.00 h=400.00 f= 5.00GHz x= 5027.18 y= 2712.83
+[INFO]  id= 49 w=400.00 h=400.00 f= 5.06GHz x= 5524.65 y= 1824.39
+[INFO]  id= 50 w=400.00 h=400.00 f= 5.20GHz x= 4983.56 y= 1117.73
+[INFO]  id= 51 w=400.00 h=400.00 f= 4.80GHz x= 4422.47 y=  628.95
+[INFO]  id= 52 w=400.00 h=400.00 f= 5.19GHz x= 5975.34 y=13906.68
+[INFO]  id= 53 w=400.00 h=400.00 f= 4.80GHz x= 6069.74 y=10823.43
+[INFO]  id= 54 w=400.00 h=400.00 f= 5.06GHz x= 6208.16 y= 6123.71
+[INFO]  id= 55 w=400.00 h=400.00 f= 4.80GHz x= 6319.76 y= 1826.26
+[INFO]  id= 56 w=400.00 h=400.00 f= 5.09GHz x= 6589.48 y=13817.82
+[INFO]  id= 57 w=400.00 h=400.00 f= 4.91GHz x= 7196.91 y=13471.33
+[INFO]  id= 58 w=400.00 h=400.00 f= 4.81GHz x= 7781.46 y=12892.94
+[INFO]  id= 59 w=400.00 h=400.00 f= 4.95GHz x= 7316.11 y=11916.41
+[INFO]  id= 60 w=400.00 h=400.00 f= 5.17GHz x= 6870.51 y=10845.62
+[INFO]  id= 61 w=400.00 h=400.00 f= 4.80GHz x= 7378.38 y= 9783.17
+[INFO]  id= 62 w=400.00 h=400.00 f= 5.13GHz x= 7879.31 y= 8674.20
+[INFO]  id= 63 w=400.00 h=400.00 f= 5.00GHz x= 7449.01 y= 7439.53
+[INFO]  id= 64 w=400.00 h=400.00 f= 5.00GHz x= 7018.13 y= 6203.54
+[INFO]  id= 65 w=400.00 h=400.00 f= 5.14GHz x= 7519.57 y= 5097.39
+[INFO]  id= 66 w=400.00 h=400.00 f= 4.95GHz x= 8030.18 y= 4034.19
+[INFO]  id= 67 w=400.00 h=400.00 f= 4.83GHz x= 7582.80 y= 2963.33
+[INFO]  id= 68 w=400.00 h=400.00 f= 5.14GHz x= 7116.60 y= 1987.27
+[INFO]  id= 69 w=400.00 h=400.00 f= 4.84GHz x= 7703.41 y= 1407.45
+[INFO]  id= 70 w=400.00 h=400.00 f= 5.20GHz x= 8312.87 y= 1061.45
+[INFO]  id= 71 w=400.00 h=400.00 f= 5.19GHz x= 8575.64 y=13054.57
+[INFO]  id= 72 w=400.00 h=400.00 f= 4.89GHz x= 8688.91 y= 8756.81
+[INFO]  id= 73 w=400.00 h=400.00 f= 4.81GHz x= 8830.24 y= 4059.97
+[INFO]  id= 74 w=400.00 h=400.00 f= 4.81GHz x= 8927.20 y=  975.27
+[INFO]  id= 75 w=400.00 h=400.00 f= 4.80GHz x=10468.69 y=14259.93
+[INFO]  id= 76 w=400.00 h=400.00 f= 5.19GHz x= 9910.70 y=13768.60
+[INFO]  id= 77 w=400.00 h=400.00 f= 4.80GHz x= 9371.03 y=13058.74
+[INFO]  id= 78 w=400.00 h=400.00 f= 5.19GHz x= 9867.18 y=12172.33
+[INFO]  id= 79 w=400.00 h=400.00 f= 4.93GHz x=10330.82 y=11164.29
+[INFO]  id= 80 w=400.00 h=400.00 f= 5.09GHz x= 9918.15 y=10002.85
+[INFO]  id= 81 w=400.00 h=400.00 f= 5.20GHz x= 9494.67 y= 8808.74
+[INFO]  id= 82 w=400.00 h=400.00 f= 4.83GHz x= 9983.72 y= 7681.94
+[INFO]  id= 83 w=400.00 h=400.00 f= 5.20GHz x=10452.72 y= 6537.86
+[INFO]  id= 84 w=400.00 h=400.00 f= 4.80GHz x=10054.13 y= 5326.62
+[INFO]  id= 85 w=400.00 h=400.00 f= 4.91GHz x= 9623.64 y= 4167.21
+[INFO]  id= 86 w=400.00 h=400.00 f= 5.01GHz x=10124.84 y= 3200.99
+[INFO]  id= 87 w=400.00 h=400.00 f= 4.84GHz x=10622.04 y= 2313.24
+[INFO]  id= 88 w=400.00 h=400.00 f= 5.03GHz x=10102.82 y= 1615.59
+[INFO]  id= 89 w=400.00 h=400.00 f= 5.20GHz x= 9530.23 y= 1161.08
+[INFO]  id= 90 w=400.00 h=400.00 f= 5.20GHz x=11034.41 y=14490.00
+[INFO]  id= 91 w=400.00 h=400.00 f= 4.83GHz x=11075.62 y=11261.39
+[INFO]  id= 92 w=400.00 h=400.00 f= 5.06GHz x=11218.24 y= 6590.41
+[INFO]  id= 93 w=400.00 h=400.00 f= 5.20GHz x=11383.97 y= 2276.75
+[INFO]  id= 94 w=400.00 h=400.00 f= 5.08GHz x=11587.81 y=14413.69
+[INFO]  id= 95 w=400.00 h=400.00 f= 4.84GHz x=12095.13 y=14002.59
+[INFO]  id= 96 w=400.00 h=400.00 f= 5.03GHz x=12515.09 y=13277.82
+[INFO]  id= 97 w=400.00 h=400.00 f= 4.81GHz x=12179.38 y=12300.59
+[INFO]  id= 98 w=400.00 h=400.00 f= 5.20GHz x=11806.86 y=11266.19
+[INFO]  id= 99 w=400.00 h=400.00 f= 4.80GHz x=12245.09 y=10223.20
+[INFO]  id=100 w=400.00 h=400.00 f= 5.20GHz x=12621.52 y= 9095.39
+[INFO]  id=101 w=400.00 h=400.00 f= 4.91GHz x=12322.35 y= 7869.43
+[INFO]  id=102 w=400.00 h=400.00 f= 4.81GHz x=11966.69 y= 6670.75
+[INFO]  id=103 w=400.00 h=400.00 f= 5.20GHz x=12409.14 y= 5595.66
+[INFO]  id=104 w=400.00 h=400.00 f= 5.07GHz x=12807.07 y= 4521.74
+[INFO]  id=105 w=400.00 h=400.00 f= 4.81GHz x=12504.63 y= 3399.80
+[INFO]  id=106 w=400.00 h=400.00 f= 5.00GHz x=12126.65 y= 2401.75
+[INFO]  id=107 w=400.00 h=400.00 f= 4.81GHz x=12664.60 y= 1783.90
+[INFO]  id=108 w=400.00 h=400.00 f= 4.93GHz x=13190.89 y= 1359.42
+[INFO]  id=109 w=400.00 h=400.00 f= 5.20GHz x=13112.49 y=13347.13
+[INFO]  id=110 w=400.00 h=400.00 f= 4.80GHz x=13254.80 y= 9161.38
+[INFO]  id=111 w=400.00 h=400.00 f= 4.81GHz x=13437.36 y= 4575.27
+[INFO]  id=112 w=400.00 h=400.00 f= 5.14GHz x=13695.35 y= 1184.55
+[INFO]  id=113 w=400.00 h=400.00 f= 4.92GHz x=13951.13 y=13703.19
+[INFO]  id=114 w=400.00 h=400.00 f= 4.81GHz x=13661.66 y=13172.13
+[INFO]  id=115 w=400.00 h=400.00 f= 4.96GHz x=13975.75 y=12360.55
+[INFO]  id=116 w=400.00 h=400.00 f= 5.15GHz x=14106.20 y=11352.46
+[INFO]  id=117 w=400.00 h=400.00 f= 5.03GHz x=14053.26 y=10268.67
+[INFO]  id=118 w=400.00 h=400.00 f= 5.20GHz x=13847.69 y= 9182.67
+[INFO]  id=119 w=400.00 h=400.00 f= 4.81GHz x=14120.35 y= 8114.43
+[INFO]  id=120 w=400.00 h=400.00 f= 5.20GHz x=14246.39 y= 6972.18
+[INFO]  id=121 w=400.00 h=400.00 f= 4.80GHz x=14212.68 y= 5822.28
+[INFO]  id=122 w=400.00 h=400.00 f= 5.16GHz x=14022.09 y= 4725.39
+[INFO]  id=123 w=400.00 h=400.00 f= 4.92GHz x=14333.20 y= 3809.75
+[INFO]  id=124 w=400.00 h=400.00 f= 4.80GHz x=14500.00 y= 2867.21
+[INFO]  id=125 w=400.00 h=400.00 f= 5.20GHz x=14452.00 y= 1963.73
+[INFO]  id=126 w=400.00 h=400.00 f= 4.81GHz x=14147.67 y= 1355.34
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id=  1 q1=  0 q2= 14 f= 6.91GHz segments=0 l=8541.47um
+[INFO]  id=  2 q1=  1 q2=  2 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=  4 q1=  3 q2=  4 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id=  5 q1=  4 q2=  5 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id=  6 q1=  4 q2= 15 f= 6.50GHz segments=0 l=9080.24um
+[INFO]  id=  7 q1=  5 q2=  6 f= 6.13GHz segments=0 l=9628.32um
+[INFO]  id=  8 q1=  6 q2=  7 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id=  9 q1=  7 q2=  8 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id= 10 q1=  8 q2=  9 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 11 q1=  8 q2= 16 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 12 q1=  9 q2= 10 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 13 q1= 10 q2= 11 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 14 q1= 11 q2= 12 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 15 q1= 12 q2= 13 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 16 q1= 12 q2= 17 f= 6.85GHz segments=0 l=8616.29um
+[INFO]  id= 17 q1= 14 q2= 18 f= 6.82GHz segments=0 l=8654.19um
+[INFO]  id= 18 q1= 15 q2= 22 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 19 q1= 16 q2= 26 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 20 q1= 17 q2= 30 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id= 21 q1= 18 q2= 19 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 22 q1= 19 q2= 20 f= 6.07GHz segments=0 l=9723.49um
+[INFO]  id= 23 q1= 20 q2= 21 f= 6.90GHz segments=0 l=8553.85um
+[INFO]  id= 24 q1= 20 q2= 33 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 25 q1= 21 q2= 22 f= 7.00GHz segments=0 l=8431.65um
+[INFO]  id= 26 q1= 22 q2= 23 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id= 27 q1= 23 q2= 24 f= 6.86GHz segments=0 l=8603.73um
+[INFO]  id= 28 q1= 24 q2= 25 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id= 29 q1= 24 q2= 34 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 30 q1= 25 q2= 26 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id= 31 q1= 26 q2= 27 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 32 q1= 27 q2= 28 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id= 33 q1= 28 q2= 29 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id= 34 q1= 28 q2= 35 f= 6.98GHz segments=0 l=8455.81um
+[INFO]  id= 35 q1= 29 q2= 30 f= 6.10GHz segments=0 l=9675.67um
+[INFO]  id= 36 q1= 30 q2= 31 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 37 q1= 31 q2= 32 f= 6.37GHz segments=0 l=9265.55um
+[INFO]  id= 38 q1= 32 q2= 36 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id= 39 q1= 33 q2= 39 f= 6.50GHz segments=0 l=9080.24um
+[INFO]  id= 40 q1= 34 q2= 43 f= 6.28GHz segments=0 l=9398.34um
+[INFO]  id= 41 q1= 35 q2= 47 f= 6.93GHz segments=0 l=8516.82um
+[INFO]  id= 42 q1= 36 q2= 51 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 43 q1= 37 q2= 38 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 44 q1= 37 q2= 52 f= 6.95GHz segments=0 l=8492.31um
+[INFO]  id= 45 q1= 38 q2= 39 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 46 q1= 39 q2= 40 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 47 q1= 40 q2= 41 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 48 q1= 41 q2= 42 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 49 q1= 41 q2= 53 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id= 50 q1= 42 q2= 43 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 51 q1= 43 q2= 44 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id= 52 q1= 44 q2= 45 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 53 q1= 45 q2= 46 f= 6.30GHz segments=0 l=9368.51um
+[INFO]  id= 54 q1= 45 q2= 54 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id= 55 q1= 46 q2= 47 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id= 56 q1= 47 q2= 48 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 57 q1= 48 q2= 49 f= 6.15GHz segments=0 l=9597.01um
+[INFO]  id= 58 q1= 49 q2= 50 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id= 59 q1= 49 q2= 55 f= 6.46GHz segments=0 l=9136.47um
+[INFO]  id= 60 q1= 50 q2= 51 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id= 61 q1= 52 q2= 56 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id= 62 q1= 53 q2= 60 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 63 q1= 54 q2= 64 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id= 64 q1= 55 q2= 68 f= 6.31GHz segments=0 l=9353.66um
+[INFO]  id= 65 q1= 56 q2= 57 f= 6.32GHz segments=0 l=9338.86um
+[INFO]  id= 66 q1= 57 q2= 58 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id= 67 q1= 58 q2= 59 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 68 q1= 58 q2= 71 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 69 q1= 59 q2= 60 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id= 70 q1= 60 q2= 61 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 71 q1= 61 q2= 62 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id= 72 q1= 62 q2= 63 f= 6.21GHz segments=0 l=9504.28um
+[INFO]  id= 73 q1= 62 q2= 72 f= 6.39GHz segments=0 l=9236.55um
+[INFO]  id= 74 q1= 63 q2= 64 f= 6.04GHz segments=0 l=9771.79um
+[INFO]  id= 75 q1= 64 q2= 65 f= 6.57GHz segments=0 l=8983.50um
+[INFO]  id= 76 q1= 65 q2= 66 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id= 77 q1= 66 q2= 67 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id= 78 q1= 66 q2= 73 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id= 79 q1= 67 q2= 68 f= 6.16GHz segments=0 l=9581.43um
+[INFO]  id= 80 q1= 68 q2= 69 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id= 81 q1= 69 q2= 70 f= 6.06GHz segments=0 l=9739.54um
+[INFO]  id= 82 q1= 70 q2= 74 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 83 q1= 71 q2= 77 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id= 84 q1= 72 q2= 81 f= 6.27GHz segments=0 l=9413.33um
+[INFO]  id= 85 q1= 73 q2= 85 f= 6.91GHz segments=0 l=8541.47um
+[INFO]  id= 86 q1= 74 q2= 89 f= 6.71GHz segments=0 l=8796.06um
+[INFO]  id= 87 q1= 75 q2= 76 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 88 q1= 75 q2= 90 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id= 89 q1= 76 q2= 77 f= 6.53GHz segments=0 l=9038.53um
+[INFO]  id= 90 q1= 77 q2= 78 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id= 91 q1= 78 q2= 79 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id= 92 q1= 79 q2= 80 f= 6.76GHz segments=0 l=8731.00um
+[INFO]  id= 93 q1= 79 q2= 91 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 94 q1= 80 q2= 81 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id= 95 q1= 81 q2= 82 f= 6.64GHz segments=0 l=8888.79um
+[INFO]  id= 96 q1= 82 q2= 83 f= 6.87GHz segments=0 l=8591.21um
+[INFO]  id= 97 q1= 83 q2= 84 f= 6.68GHz segments=0 l=8835.57um
+[INFO]  id= 98 q1= 83 q2= 92 f= 6.20GHz segments=0 l=9519.61um
+[INFO]  id= 99 q1= 84 q2= 85 f= 6.23GHz segments=0 l=9473.77um
+[INFO]  id=100 q1= 85 q2= 86 f= 6.81GHz segments=0 l=8666.90um
+[INFO]  id=101 q1= 86 q2= 87 f= 6.36GHz segments=0 l=9280.12um
+[INFO]  id=102 q1= 87 q2= 88 f= 6.97GHz segments=0 l=8467.95um
+[INFO]  id=103 q1= 87 q2= 93 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id=104 q1= 88 q2= 89 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id=105 q1= 90 q2= 94 f= 6.59GHz segments=0 l=8956.23um
+[INFO]  id=106 q1= 91 q2= 98 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id=107 q1= 92 q2=102 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id=108 q1= 93 q2=106 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=109 q1= 94 q2= 95 f= 6.02GHz segments=0 l=9804.25um
+[INFO]  id=110 q1= 95 q2= 96 f= 6.18GHz segments=0 l=9550.42um
+[INFO]  id=111 q1= 96 q2= 97 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id=112 q1= 96 q2=109 f= 6.34GHz segments=0 l=9309.40um
+[INFO]  id=113 q1= 97 q2= 98 f= 6.54GHz segments=0 l=9024.71um
+[INFO]  id=114 q1= 98 q2= 99 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id=115 q1= 99 q2=100 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id=116 q1=100 q2=101 f= 6.83GHz segments=0 l=8641.52um
+[INFO]  id=117 q1=100 q2=110 f= 6.96GHz segments=0 l=8480.11um
+[INFO]  id=118 q1=101 q2=102 f= 6.44GHz segments=0 l=9164.84um
+[INFO]  id=119 q1=102 q2=103 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id=120 q1=103 q2=104 f= 6.77GHz segments=0 l=8718.11um
+[INFO]  id=121 q1=104 q2=105 f= 6.33GHz segments=0 l=9324.10um
+[INFO]  id=122 q1=104 q2=111 f= 6.65GHz segments=0 l=8875.43um
+[INFO]  id=123 q1=105 q2=106 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id=124 q1=106 q2=107 f= 6.13GHz segments=0 l=9628.32um
+[INFO]  id=125 q1=107 q2=108 f= 6.55GHz segments=0 l=9010.93um
+[INFO]  id=126 q1=108 q2=112 f= 6.60GHz segments=0 l=8942.66um
+[INFO]  id=127 q1=109 q2=114 f= 6.93GHz segments=0 l=8516.82um
+[INFO]  id=128 q1=110 q2=118 f= 6.25GHz segments=0 l=9443.45um
+[INFO]  id=129 q1=111 q2=122 f= 6.72GHz segments=0 l=8782.97um
+[INFO]  id=130 q1=112 q2=126 f= 6.38GHz segments=0 l=9251.03um
+[INFO]  id=131 q1=113 q2=114 f= 6.08GHz segments=0 l=9707.50um
+[INFO]  id=132 q1=114 q2=115 f= 6.43GHz segments=0 l=9179.10um
+[INFO]  id=133 q1=115 q2=116 f= 6.49GHz segments=0 l=9094.23um
+[INFO]  id=134 q1=116 q2=117 f= 6.97GHz segments=0 l=8467.95um
+[INFO]  id=135 q1=117 q2=118 f= 6.42GHz segments=0 l=9193.39um
+[INFO]  id=136 q1=118 q2=119 f= 6.09GHz segments=0 l=9691.56um
+[INFO]  id=137 q1=119 q2=120 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id=138 q1=120 q2=121 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=139 q1=121 q2=122 f= 6.80GHz segments=0 l=8679.64um
+[INFO]  id=140 q1=122 q2=123 f= 6.24GHz segments=0 l=9458.59um
+[INFO]  id=141 q1=123 q2=124 f= 6.48GHz segments=0 l=9108.27um
+[INFO]  id=142 q1=124 q2=125 f= 6.05GHz segments=0 l=9755.63um
+[INFO]  id=143 q1=125 q2=126 f= 6.98GHz segments=0 l=8455.81um
+[INFO] [FP][falcon] num_qubits=27 chip=(6900, 6900) qubits=27 couplers=28 cmap=28
+[INFO] Qubit
+[INFO]  id=  0 w=400.00 h=400.00 f= 4.85GHz x= 6483.84 y= 4328.94
+[INFO]  id=  1 w=400.00 h=400.00 f= 5.17GHz x= 5991.95 y= 4119.05
+[INFO]  id=  2 w=400.00 h=400.00 f= 4.96GHz x= 5965.87 y= 3083.68
+[INFO]  id=  3 w=400.00 h=400.00 f= 4.85GHz x= 5698.42 y= 2187.95
+[INFO]  id=  4 w=400.00 h=400.00 f= 4.97GHz x= 5505.91 y= 4798.76
+[INFO]  id=  5 w=400.00 h=400.00 f= 4.96GHz x= 5217.81 y= 1543.59
+[INFO]  id=  6 w=400.00 h=400.00 f= 4.98GHz x= 5118.90 y= 6017.55
+[INFO]  id=  7 w=400.00 h=400.00 f= 5.19GHz x= 4903.13 y= 5240.19
+[INFO]  id=  8 w=400.00 h=400.00 f= 5.19GHz x= 4623.61 y= 1210.33
+[INFO]  id=  9 w=400.00 h=400.00 f= 4.95GHz x= 4773.63 y=  400.00
+[INFO]  id= 10 w=400.00 h=400.00 f= 5.08GHz x= 4227.46 y= 5021.25
+[INFO]  id= 11 w=400.00 h=400.00 f= 4.90GHz x= 3972.05 y= 1629.53
+[INFO]  id= 12 w=400.00 h=400.00 f= 4.94GHz x= 3537.71 y= 4623.31
+[INFO]  id= 13 w=400.00 h=400.00 f= 5.18GHz x= 3456.67 y= 3424.21
+[INFO]  id= 14 w=400.00 h=400.00 f= 5.07GHz x= 3369.76 y= 2239.92
+[INFO]  id= 15 w=400.00 h=400.00 f= 4.82GHz x= 2935.20 y= 5231.64
+[INFO]  id= 16 w=400.00 h=400.00 f= 4.80GHz x= 2672.27 y= 1855.14
+[INFO]  id= 17 w=400.00 h=400.00 f= 5.18GHz x= 2140.91 y= 6483.65
+[INFO]  id= 18 w=400.00 h=400.00 f= 4.96GHz x= 2292.79 y= 5674.45
+[INFO]  id= 19 w=400.00 h=400.00 f= 5.06GHz x= 1985.98 y= 1663.81
+[INFO]  id= 20 w=400.00 h=400.00 f= 5.20GHz x= 1752.14 y=  888.98
+[INFO]  id= 21 w=400.00 h=400.00 f= 5.18GHz x= 1701.41 y= 5372.81
+[INFO]  id= 22 w=400.00 h=400.00 f= 4.84GHz x= 1380.86 y= 2119.71
+[INFO]  id= 23 w=400.00 h=400.00 f= 4.96GHz x= 1210.64 y= 4744.97
+[INFO]  id= 24 w=400.00 h=400.00 f= 4.84GHz x=  929.22 y= 3849.26
+[INFO]  id= 25 w=400.00 h=400.00 f= 5.17GHz x=  901.68 y= 2802.23
+[INFO]  id= 26 w=400.00 h=400.00 f= 4.86GHz x=  400.19 y= 2595.08
+[INFO] Coupler
+[INFO]  id=  0 q1=  0 q2=  1 f= 6.89GHz segments=0 l=8566.27um
+[INFO]  id=  1 q1=  1 q2=  2 f= 6.62GHz segments=0 l=8915.65um
+[INFO]  id=  2 q1=  1 q2=  4 f= 6.19GHz segments=0 l=9534.99um
+[INFO]  id=  3 q1=  2 q2=  3 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id=  4 q1=  3 q2=  5 f= 6.84GHz segments=0 l=8628.89um
+[INFO]  id=  5 q1=  4 q2=  7 f= 6.56GHz segments=0 l=8997.19um
+[INFO]  id=  6 q1=  5 q2=  8 f= 6.01GHz segments=0 l=9820.56um
+[INFO]  id=  7 q1=  6 q2=  7 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id=  8 q1=  7 q2= 10 f= 6.45GHz segments=0 l=9150.63um
+[INFO]  id=  9 q1=  8 q2=  9 f= 6.73GHz segments=0 l=8769.92um
+[INFO]  id= 10 q1=  8 q2= 11 f= 6.69GHz segments=0 l=8822.36um
+[INFO]  id= 11 q1= 10 q2= 12 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 12 q1= 11 q2= 14 f= 6.29GHz segments=0 l=9383.40um
+[INFO]  id= 13 q1= 12 q2= 13 f= 6.78GHz segments=0 l=8705.25um
+[INFO]  id= 14 q1= 12 q2= 15 f= 6.79GHz segments=0 l=8692.43um
+[INFO]  id= 15 q1= 13 q2= 14 f= 6.47GHz segments=0 l=9122.35um
+[INFO]  id= 16 q1= 14 q2= 16 f= 6.12GHz segments=0 l=9644.05um
+[INFO]  id= 17 q1= 15 q2= 18 f= 6.51GHz segments=0 l=9066.30um
+[INFO]  id= 18 q1= 16 q2= 19 f= 6.41GHz segments=0 l=9207.74um
+[INFO]  id= 19 q1= 17 q2= 18 f= 6.51GHz segments=0 l=9066.30um
+[INFO]  id= 20 q1= 18 q2= 21 f= 6.26GHz segments=0 l=9428.37um
+[INFO]  id= 21 q1= 19 q2= 20 f= 6.17GHz segments=0 l=9565.90um
+[INFO]  id= 22 q1= 19 q2= 22 f= 6.40GHz segments=0 l=9222.12um
+[INFO]  id= 23 q1= 21 q2= 23 f= 6.66GHz segments=0 l=8862.10um
+[INFO]  id= 24 q1= 22 q2= 25 f= 6.99GHz segments=0 l=8443.72um
+[INFO]  id= 25 q1= 23 q2= 24 f= 6.35GHz segments=0 l=9294.74um
+[INFO]  id= 26 q1= 24 q2= 25 f= 6.11GHz segments=0 l=9659.83um
+[INFO]  id= 27 q1= 25 q2= 26 f= 6.21GHz segments=0 l=9504.28um
