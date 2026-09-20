@@ -1111,14 +1111,31 @@ class Floorplan:
         # 스냅해 손실을 원천 제거했다(바깥쪽으로만 키우므로 GP 하드 제약이 약해지는 방향이지
         # 좁아지는 방향이 아니다: 실제 배선 여유가 늘어나는 것이지 물리적으로 잘못된 방향이
         # 아니다).
+        #
+        # region()이 None을 돌려줄 수 있다(2026-09-20, 가용 면적 반복 확장이 die 밖으로
+        # 나가야 하거나 반복 한도 안에 못 끝난 경우 — Coupler.region() docstring 참고).
+        # 그 경우 스냅을 건너뛰고 coupler_regions[key]=None으로 남긴다 — GP의 기존
+        # "박스 없음" 실패 경로(core/globalplacement.py의 _place_chain)가 이 커플러 하나만
+        # 실패로 세고 칩 전체는 계속 진행한다.
         cell = float(self.params.segment_size_um)
-        coupler_regions = {
-            key: _snap_box_to_grid(
-                state.couplers[key].region(new_qubits[key[0]], new_qubits[key[1]], *port_assignment[key]),
-                cell,
+        coupler_regions: dict[tuple[int, int], tuple[float, float, float, float] | None] = {}
+        n_region_failed = 0
+        for key in state.couplers:
+            box = state.couplers[key].region(
+                new_qubits[key[0]], new_qubits[key[1]], *port_assignment[key],
+                new_qubits, state.chip_width, state.chip_height,
             )
-            for key in state.couplers
-        }
+            if box is None:
+                n_region_failed += 1
+                coupler_regions[key] = None
+            else:
+                coupler_regions[key] = _snap_box_to_grid(box, cell)
+        if n_region_failed:
+            logging.warning(
+                "[FP] %s: 커플러 %d개는 가용 면적 확장이 수렴하지 못해 박스를 못 정했습니다 "
+                "(die 경계 초과 또는 반복 한도 초과) — GP에서 배치 실패로 집계됩니다.",
+                state.processor_name, n_region_failed,
+            )
 
         return replace(
             state,

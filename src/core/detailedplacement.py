@@ -195,7 +195,13 @@ class _LayoutModel:
         seg_half0 = np.array(seg_half_list, dtype=float)
         seg_coupler_idx_arr = np.array(seg_coupler_idx, dtype=int)
 
-        box_keys = sorted(state.coupler_regions)
+        # region()이 가용 면적 확장에 실패하면 coupler_regions[key]가 None일 수 있다
+        # (core/state.py의 Coupler.region() docstring, 2026-09-20) — 그 커플러는 GP가
+        # 세그먼트를 하나도 못 놓은 상태(segments=[])라 seg_keys에도 애초에 안 나타나므로
+        # (아래 for-loop이 c.segments를 도는 것만 seg_keys에 넣는다) 박스 행 자체가
+        # 필요 없다. None을 건너뛰지 않으면 box_x0/x1/y0/y1 배열 생성이 바로 TypeError로
+        # 죽는다.
+        box_keys = sorted(k for k, box in state.coupler_regions.items() if box is not None)
         coupler_key_to_box_row = {k: i for i, k in enumerate(box_keys)}
         box_x0 = np.array([state.coupler_regions[k][0] for k in box_keys], dtype=float)
         box_x1 = np.array([state.coupler_regions[k][1] for k in box_keys], dtype=float)

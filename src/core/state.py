@@ -17,6 +17,74 @@ from dataclasses import dataclass, field
 # 보다 깊은)은 그대로 잡는다.
 AABB_EPS_UM = 1e-6
 
+# Coupler.region()의 가용 면적 반복 확장이 종료를 보장받기 위한 최대 반복 횟수. 한 반복은
+# "부족분(deficit)만큼 단변을 넓힌다"인데, 그 새 띠가 제3자 큐빗에 다시 막히면 다음
+# 반복에서 또 넓혀야 한다 — 새로 걸리는 큐빗의 겹침 비율이 매 반복 기하급수적으로
+# 줄어들며 수렴하는 게 보통이지만(실측: eagle 커플러 (3,4)가 감쇠비 ~0.42로 20번째
+# 반복에서 deficit 0.0013um²까지 좁혀졌다 — 20이었다면 여기서 반복 한도 초과로 오판할
+# 뻔했다), 감쇠비가 1에 가까울수록(막는 큐빗이 넓은 방향으로 걸쳐 있을수록) 더 많은
+# 반복이 필요하다. 40은 그런 느린 수렴까지 여유 있게 흡수하면서도(반복당 비용이
+# O(큐빗 수)라 40번도 무시 가능한 수준) 진짜로 자리가 없는 경우(die 경계 검사가 즉시
+# 잡아낸다 — 실측 대부분의 실패는 it=0에서 die 경계에 걸렸다)와는 여전히 구별된다.
+_REGION_GROW_MAX_ITERS = 40
+
+# region()의 반복 확장에서 "사실상 다 채웠다"로 볼 부족분(deficit) 허용치 (um²). 필요
+# 면적(required_wire_area, 이 저장소 벤치마크에서 수만~수십만 um²)에 비해 8~9자리
+# 작아 실제 용량 부족을 가려낼 걱정은 없고, 순수하게 부동소수 반올림 잡음만 흡수한다
+# (AABB_EPS_UM과 같은 목적, 다른 물리량용).
+_REGION_AREA_EPS_UM2 = 1e-3
+
+
+# region()의 반복 확장에서 쓰는 사각형 교집합 헬퍼. func/compute.py의 _aabb_overlap()은
+# "겹치는가"(bool)만 답하는데, 여기서는 가용 면적 계산에 실제 교집합 "넓이"가 필요해서
+# 겹치는 사각형 자체(또는 안 겹치면 None)를 돌려주는 버전을 따로 둔다.
+def _rect_intersect(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float],
+) -> tuple[float, float, float, float] | None:
+    x0, x1 = max(a[0], b[0]), min(a[1], b[1])
+    y0, y1 = max(a[2], b[2]), min(a[3], b[3])
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return (x0, x1, y0, y1)
+
+
+def _rect_area(rect: tuple[float, float, float, float] | None) -> float:
+    if rect is None:
+        return 0.0
+    x0, x1, y0, y1 = rect
+    return (x1 - x0) * (y1 - y0)
+
+
+# region() 박스 안에서 실제로 세그먼트를 못 놓는("막힌") 면적. 큐빗과 겹치는 부분은
+# 전부 막힌 것으로 치되, 자기 큐빗(coupler.is_own_qubit)이면 배정 포트를 중심으로 한 변
+# segment_size_um인 정사각형("포트 셀")만큼은 빼준다 — 그 자리는 실제로 배선이 붙어야
+# 하는 지점이라 못 놓는 면적이 아니다. GP의 실제 배치 판정(coupler_own_port_cell, 격자
+# 셀에 대한 점-포함)과 셀 하나하나가 정확히 일치하진 않는다 — region()은 GP의 전역
+# 격자를 아직 모르는 연속좌표 단계라 그럴 수 없다. 대신 "포트 주변 한 칸 넓이는 쓸 수
+# 있다"는 같은 물리적 근거를 면적 수준에서 근사한 것이다 — 정확한 셀 판정은 격자를
+# 아는 GP가 맡고, 여기서는 박스 크기를 정하기 위한 예산에만 쓰인다.
+def _region_blocked_area(
+    coupler: "Coupler", box: tuple[float, float, float, float],
+    qubits: dict[int, "Qubit"], port1: str | None, port2: str | None,
+) -> float:
+    half = coupler.segment_size_um / 2.0
+    blocked = 0.0
+    for qid, q in qubits.items():
+        q_aabb = (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
+        hit = _rect_intersect(box, q_aabb)
+        if hit is None:
+            continue
+        area = _rect_area(hit)
+        if coupler.is_own_qubit(qid):
+            port_name = port1 if qid == coupler.q1 else port2
+            if port_name is not None:
+                px, py = q.ports[port_name]
+                port_cell = (px - half, px + half, py - half, py + half)
+                area -= _rect_area(_rect_intersect(hit, port_cell))
+        blocked += area
+    return blocked
+
+
 @dataclass
 class Qubit:
     id: int              # node id
@@ -148,11 +216,22 @@ class Coupler:
     # 용도로도 쓸 수 없었다. "배치 전 후보 영역"과 "배치 후 실제 footprint"는 서로 다른
     # 개념이라 region()/bbox()로 분리한다.
 
-    def region(self, q1: Qubit, q2: Qubit, port1: str | None, port2: str | None) -> tuple[float, float, float, float]:
+    def region(
+        self, q1: Qubit, q2: Qubit, port1: str | None, port2: str | None,
+        qubits: dict[int, Qubit], chip_width: float, chip_height: float,
+    ) -> tuple[float, float, float, float] | None:
         # 배치 전 제약: GP가 이 커플러의 segments를 채울 때, 그 안에서만 배치하도록 쓸
-        # 후보 영역이다 (2026-09-16 기준 GP 알고리즘 미구현이라 아직 호출부 없음 — 구현 시 사용).
-        # DRC는 bbox()(AABB)를 쓰므로 여기서도 AABB로 유지한다 — 회전 사각형은 겹침 판정이
-        # 복잡해져 지금 단계에서 도입하지 않는다.
+        # 후보 영역이다. DRC는 bbox()(AABB)를 쓰므로 여기서도 AABB로 유지한다 — 회전
+        # 사각형은 겹침 판정이 복잡해져 지금 단계에서 도입하지 않는다.
+        #
+        # qubits(칩 전체 큐빗)/chip_width/chip_height는 2026-09-20 own-qubit 예외를
+        # "포트 셀만"으로 좁힌 뒤 추가됐다 — 아래 3) 참고. None을 반환할 수 있게 된 것도
+        # 이때부터다(그 전엔 항상 박스를 돌려줬다): 가용 면적 확장이 die 밖으로 나가야
+        # 하거나 반복 한도 안에 못 끝나면, 이 커플러는 이 위치에서 애초에 배선이 안
+        # 들어간다는 뜻이라 None으로 실패를 알린다 — 호출부(core/floorplan.py)가 그대로
+        # coupler_regions[key]=None으로 남기면, GP의 기존 "박스 없음" 실패 경로
+        # (core/globalplacement.py의 _place_chain, `box is None: return None`)를 그대로
+        # 타서 이 커플러 하나만 실패로 세고 칩 전체는 계속 진행한다.
         p1 = q1.ports[port1] if port1 is not None else (q1.x, q1.y)
         p2 = q2.ports[port2] if port2 is not None else (q2.x, q2.y)
         # port1/port2가 아직 배정 안 됐으면(ChipState.port_assignment가 이 커플러 키를 안 가지고
@@ -186,29 +265,58 @@ class Coupler:
             pad = (self.segment_size_um - (y1 - y0)) / 2.0
             y0, y1 = y0 - pad, y1 + pad
 
-        # 3) 면적 하한: 필요 배선 면적(l * meander_spacing_um) 이상이 되도록 "단변만" 확장한다.
-        #    장변(포트를 잇는 축)까지 같이 늘리면 영역이 포트 바깥으로 삐져나간다 — 예:
-        #    포트 거리 1000, 필요 면적 1,098,000이면 양변을 늘릴 경우 장변이 1000→2343으로
-        #    벌어져 포트를 훌쩍 넘어선다. 미앤더는 포트-포트 방향이 아니라 그 옆(단변 방향)
-        #    으로 지그재그 퍼지는 게 물리적으로 맞으므로 짧은 변만 키운다.
-        #    w == h(대각선이라 장변이 애매)일 때는 x축을 장변으로 고정한다 — AABB만 쓰고
-        #    회전 사각형은 안 쓰기로 했으므로(DRC의 bbox()와 형식을 맞추기 위해) 애초에
-        #    대각선 방향 자체를 표현할 수 없고, 어느 축을 고정해도 "두 포트 포함" 불변식은
-        #    동일하게 유지되니 임의로 골라도 무해하다.
+        # 3) 면적 하한: 필요 배선 면적(l * meander_spacing_um) 이상의 '가용 면적'이 되도록
+        #    반복 확장한다. 2026-09-20 own-qubit 예외를 포트 셀로 좁히기(coupler_own_port_cell)
+        #    전까지는 박스 전체 면적(w*h)만 required_wire_area와 비교했다 — 그런데 좁힌
+        #    뒤로는 박스 안에서 큐빗 몸체(자기 것도 포트 셀 제외, 제3자는 전부)가 차지한
+        #    면적이 실제로 세그먼트를 못 놓는 죽은 면적이 됐다. 그걸 안 빼고 w*h만 보면
+        #    박스가 "면적상 충분"해 보여도 실제 가용 면적은 모자라 GP가 못 채운다 — 실측:
+        #    박스당 평균 8.4~27.8%가 이렇게 죽은 면적이었고, GP 실패율이 2.6%→14.4%로
+        #    뛴 원인의 60%가 (경합이 아니라) 이 순수 용량부족이었다.
+        #
+        #    "단변만 넓힌다"는 원래 근거(장변까지 늘리면 포트 바깥으로 삐져나감 — 포트
+        #    거리 1000, 필요 면적 1,098,000이면 양변을 늘릴 경우 장변이 1000→2343으로
+        #    벌어짐)는 그대로 유지한다. 반복이 필요한 이유는 늘린 단변이 새 큐빗(제3자)을
+        #    덮어써서 가용 면적이 기대만큼 안 늘 수 있기 때문이다 — 한 번에 계산한 목표
+        #    크기로는 부족해서, 매 반복 다시 막힌 면적을 재보고 남은 부족분만큼만 더 넓힌다.
+        #
+        #    수렴 실패(=이 위치엔 이 커플러가 들어갈 자리가 없음)를 두 조건으로 정의한다:
+        #    (a) _REGION_GROW_MAX_ITERS 안에 못 끝남(매번 새로 걸리는 제3자 큐빗에 먹히는
+        #    면적이 늘린 면적과 비슷해 수렴이 느림), (b) 확장이 die 경계를 넘어야 함(그
+        #    방향으로 die 안에 물리적으로 그만한 빈 면적 자체가 없음). 둘 다 None을
+        #    돌려준다 — 위 docstring 참고.
         required_wire_area = self.l * self.meander_spacing_um
-        w, h = x1 - x0, y1 - y0
-        area = w * h
-        if area < required_wire_area:
+        for _ in range(_REGION_GROW_MAX_ITERS):
+            blocked = _region_blocked_area(self, (x0, x1, y0, y1), qubits, port1, port2)
+            available = (x1 - x0) * (y1 - y0) - blocked
+            deficit = required_wire_area - available
+            # _REGION_AREA_EPS_UM2만큼은 "사실상 다 채웠다"로 본다. w±add/2를 두 번(양쪽에)
+            # 적용하는 부동소수 연산은 이론상 available==required인 경계에서도 ~1e-10um²
+            # 수준의 반올림 잔차를 남길 수 있다(AABB_EPS_UM 주석이 설명하는 것과 같은 부류의
+            # 잡음) — 잔차가 남으면 다음 반복이 잔차만큼만 더 넓히려 하는데, 그 add가
+            # float 정밀도 이하로 뭉개져 박스가 조금도 안 바뀐 채 매 반복 같은 미세 부족을
+            # 반복하며 die 판정에 걸리지도, 수렴 판정을 통과하지도 못하고 그대로
+            # _REGION_GROW_MAX_ITERS를 다 태우는 무한 정체가 실측으로 확인됐다(grid_25
+            # 40개 중 12개가 이렇게 가짜로 "수렴 실패" 판정됐었다 — 실제로는 첫 확장에서
+            # 이미 사실상 다 채워져 있었다). 필요 면적 대비 극히 작은(1e-3um², 물리적으로
+            # 무의미한 크기) 절대 허용치라 실제 용량 부족(수백~수만um² 단위)을 감추지 않는다.
+            if deficit <= _REGION_AREA_EPS_UM2:
+                return (x0, x1, y0, y1)
+            w, h = x1 - x0, y1 - y0
             if w >= h:
-                new_h = required_wire_area / w
-                pad = (new_h - h) / 2.0
-                y0, y1 = y0 - pad, y1 + pad
+                add = deficit / w
+                new_y0, new_y1 = y0 - add / 2.0, y1 + add / 2.0
+                if new_y0 < 0.0 or new_y1 > chip_height:
+                    return None
+                y0, y1 = new_y0, new_y1
             else:
-                new_w = required_wire_area / h
-                pad = (new_w - w) / 2.0
-                x0, x1 = x0 - pad, x1 + pad
+                add = deficit / h
+                new_x0, new_x1 = x0 - add / 2.0, x1 + add / 2.0
+                if new_x0 < 0.0 or new_x1 > chip_width:
+                    return None
+                x0, x1 = new_x0, new_x1
 
-        return (x0, x1, y0, y1)
+        return None
 
     def bbox(self) -> tuple[float, float, float, float] | None:
         # 배치 후 관찰: 실제 배치된 세그먼트들의 bounding box. segments가 비어 있으면(GP 이전) None.
@@ -303,7 +411,9 @@ class ChipState:
     # GP는 이 안에서만 세그먼트를 배치한다(박스 밖으로 넓히지 않음, core/globalplacement.py
     # 참고) — 즉 여기 저장된 박스가 GP의 하드 탐색 범위 자체가 된다(FP 이전엔 하드 제약
     # 아니었던 region()의 "힌트"를, FP가 확정한 순간부터 하드 제약으로 승격시키는 셈).
-    coupler_regions: dict[tuple[int, int], tuple[float, float, float, float]] = field(default_factory=dict)
+    # 값이 None이면(2026-09-20) region()의 가용 면적 확장이 수렴하지 못했다는 뜻 —
+    # Coupler.region() docstring 참고. GP는 이를 "박스 없음" 실패로 처리한다.
+    coupler_regions: dict[tuple[int, int], tuple[float, float, float, float] | None] = field(default_factory=dict)
 
     # 아래 3개는 FP(core/floorplan.py)가 확정해 채우는 필드 — GP가 참조한다(예: crossover로
     # 잘려나간 엣지는 GP/routing이 air bridge 등 다른 방식으로 처리해야 함을 알아야 한다).
