@@ -1285,14 +1285,14 @@ def _resolve_box_overlaps(
     port_assignment = dict(port_assignment)
     adj = _coupler_adjacency(couplers)
 
-    # region()이 돌려주는 연속좌표 박스가 아니라, GP가 실제로 쓰는 격자-스냅된 박스
-    # (_snap_box_to_grid) 기준으로 위반을 판정하고 후보를 검증한다. 처음엔 연속좌표
-    # 기준으로 짰었는데(_place()가 이 함수 반환 후 따로 스냅), 스냅은 바깥쪽으로만
-    # 넓히므로 "연속 좌표에서는 안 겹침"이었던 경우도 스냅 후엔 새로 겹칠 수 있다 —
-    # 실측(xtree_53): 연속좌표 기준 4건 중 3건을 풀었다고 판단했는데, 스냅 후 실제
-    # coupler_regions엔 9건이 남아 있었다(이 함수가 보지 않는 곳에서 위반이 새로
-    # 생긴 것). 스냅 후 좌표로 판정해야 "이 함수가 없다고 보고한 위반"과 "GP가 실제로
-    # 마주치는 위반"이 일치한다.
+    # region()이 돌려주는 박스가 이미 격자에 정렬돼 있다(2026-09-20, region()이 연속
+    # 면적이 아니라 격자 셀 개수를 직접 세며 확장하도록 바뀐 뒤로 — core/state.py의
+    # Coupler.region() docstring 참고). 그래서 여기서 위반을 판정하고 후보를 검증할 때
+    # region() 결과를 바로 쓴다. _snap_box_to_grid는 그래도 한 번 더 걸어 둔다 — 이미
+    # 정렬된 박스에는 항등 연산(no-op)이지만, 공짜에 가까운 비용으로 "여기서 쓰는 박스가
+    # 항상 격자에 맞다"는 불변식을 방어적으로 보장한다(예전엔 이 불변식이 깨져서
+    # 실측(xtree_53)에서 여기가 4건 중 3건을 풀었다고 판단했는데 실제 coupler_regions엔
+    # 9건이 남아 있었던 적이 있다 — 그 버그의 재발을 막는 안전망).
     def compute_regions() -> dict[tuple[int, int], tuple[float, float, float, float] | None]:
         out: dict[tuple[int, int], tuple[float, float, float, float] | None] = {}
         for key in couplers:

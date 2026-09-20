@@ -17,27 +17,18 @@ from dataclasses import dataclass, field
 # 보다 깊은)은 그대로 잡는다.
 AABB_EPS_UM = 1e-6
 
-# Coupler.region()의 가용 면적 반복 확장이 종료를 보장받기 위한 최대 반복 횟수. 한 반복은
-# "부족분(deficit)만큼 단변을 넓힌다"인데, 그 새 띠가 제3자 큐빗에 다시 막히면 다음
-# 반복에서 또 넓혀야 한다 — 새로 걸리는 큐빗의 겹침 비율이 매 반복 기하급수적으로
-# 줄어들며 수렴하는 게 보통이지만(실측: eagle 커플러 (3,4)가 감쇠비 ~0.42로 20번째
-# 반복에서 deficit 0.0013um²까지 좁혀졌다 — 20이었다면 여기서 반복 한도 초과로 오판할
-# 뻔했다), 감쇠비가 1에 가까울수록(막는 큐빗이 넓은 방향으로 걸쳐 있을수록) 더 많은
-# 반복이 필요하다. 40은 그런 느린 수렴까지 여유 있게 흡수하면서도(반복당 비용이
-# O(큐빗 수)라 40번도 무시 가능한 수준) 진짜로 자리가 없는 경우(die 경계 검사가 즉시
-# 잡아낸다 — 실측 대부분의 실패는 it=0에서 die 경계에 걸렸다)와는 여전히 구별된다.
+# Coupler.region()의 가용 셀 반복 확장이 종료를 보장받기 위한 최대 반복 횟수. 한 반복은
+# 단변을 정확히 cell(segment_size_um) 한 칸만큼 넓힌다 — 그 새 줄이 제3자 큐빗에 다시
+# 막히면 다음 반복에서 또 넓혀야 한다. 고정 폭(cell)만큼만 늘리므로 2026-09-20 버전
+# (부족분 비례 증가, 감쇠비가 1에 가까우면 느려짐)과 달리 매 반복 진전량이 최소 0인
+# 경우(그 줄이 전부 막혔을 때)만 빼면 항상 최소 1행/열은 새로 확보된다 — 큐빗 폭이
+# 유한하므로(400um=cell 2개) 몇 번이면 그 큐빗을 지나쳐 막힘이 풀린다. 40은 그런 경우도
+# 여유 있게 흡수하는 값(반복당 비용은 O(박스 안 셀 수 × 큐빗 수)로 작다).
 _REGION_GROW_MAX_ITERS = 40
 
-# region()의 반복 확장에서 "사실상 다 채웠다"로 볼 부족분(deficit) 허용치 (um²). 필요
-# 면적(required_wire_area, 이 저장소 벤치마크에서 수만~수십만 um²)에 비해 8~9자리
-# 작아 실제 용량 부족을 가려낼 걱정은 없고, 순수하게 부동소수 반올림 잡음만 흡수한다
-# (AABB_EPS_UM과 같은 목적, 다른 물리량용).
-_REGION_AREA_EPS_UM2 = 1e-3
 
-
-# region()의 반복 확장에서 쓰는 사각형 교집합 헬퍼. func/compute.py의 _aabb_overlap()은
-# "겹치는가"(bool)만 답하는데, 여기서는 가용 면적 계산에 실제 교집합 "넓이"가 필요해서
-# 겹치는 사각형 자체(또는 안 겹치면 None)를 돌려주는 버전을 따로 둔다.
+# region()의 반복 확장, 그리고 아래 _count_free_cells_in_box에서 쓰는 사각형 교집합
+# 헬퍼(겹치는지 여부만 필요 — 겹치는 사각형 자체는 안 쓰므로 None 여부만 본다).
 def _rect_intersect(
     a: tuple[float, float, float, float], b: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float] | None:
@@ -48,41 +39,70 @@ def _rect_intersect(
     return (x0, x1, y0, y1)
 
 
-def _rect_area(rect: tuple[float, float, float, float] | None) -> float:
-    if rect is None:
-        return 0.0
-    x0, x1, y0, y1 = rect
-    return (x1 - x0) * (y1 - y0)
-
-
-# region() 박스 안에서 실제로 세그먼트를 못 놓는("막힌") 면적. 큐빗과 겹치는 부분은
-# 전부 막힌 것으로 치되, 자기 큐빗(coupler.is_own_qubit)이면 배정 포트를 중심으로 한 변
-# segment_size_um인 정사각형("포트 셀")만큼은 빼준다 — 그 자리는 실제로 배선이 붙어야
-# 하는 지점이라 못 놓는 면적이 아니다. GP의 실제 배치 판정(coupler_own_port_cell, 격자
-# 셀에 대한 점-포함)과 셀 하나하나가 정확히 일치하진 않는다 — region()은 GP의 전역
-# 격자를 아직 모르는 연속좌표 단계라 그럴 수 없다. 대신 "포트 주변 한 칸 넓이는 쓸 수
-# 있다"는 같은 물리적 근거를 면적 수준에서 근사한 것이다 — 정확한 셀 판정은 격자를
-# 아는 GP가 맡고, 여기서는 박스 크기를 정하기 위한 예산에만 쓰인다.
-def _region_blocked_area(
-    coupler: "Coupler", box: tuple[float, float, float, float],
-    qubits: dict[int, "Qubit"], port1: str | None, port2: str | None,
-) -> float:
-    half = coupler.segment_size_um / 2.0
-    blocked = 0.0
+# cell_aabb(격자 셀 하나)가 큐빗 때문에 막혔는지 — core/globalplacement.py의
+# _cell_blocked와 같은 판정(자기 큐빗은 coupler_own_port_cell로 배정 포트가 있는 셀만
+# 예외, 제3자는 전부 막힘)을 GP의 segment_occupied 없이(아직 다른 커플러가 뭘 놨는지
+# 모르는 단계이므로) 적용한 버전이다. region()이 이제 격자를 직접 세므로(아래
+# _count_free_cells_in_box) GP와 정확히 같은 함수(coupler_own_port_cell) 하나로 판정을
+# 통일한다 — 예전 _region_blocked_area는 면적을 연속값으로 근사했는데("포트 주변 한 칸
+# 넓이"를 면적으로 흉내), 이제는 격자를 직접 알므로 근사가 필요 없다.
+def _cell_blocked_by_qubits(
+    coupler: "Coupler", qubits: dict[int, "Qubit"],
+    assignment: tuple[str, str] | None, cell_aabb: tuple[float, float, float, float],
+) -> bool:
     for qid, q in qubits.items():
         q_aabb = (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
-        hit = _rect_intersect(box, q_aabb)
-        if hit is None:
+        if _rect_intersect(cell_aabb, q_aabb) is None:
             continue
-        area = _rect_area(hit)
-        if coupler.is_own_qubit(qid):
-            port_name = port1 if qid == coupler.q1 else port2
-            if port_name is not None:
-                px, py = q.ports[port_name]
-                port_cell = (px - half, px + half, py - half, py + half)
-                area -= _rect_area(_rect_intersect(hit, port_cell))
-        blocked += area
-    return blocked
+        if coupler_own_port_cell(coupler, qid, q, assignment, cell_aabb):
+            continue
+        return True
+    return False
+
+
+# [lo,hi] 축 하나에 "완전히" 포함되는 셀들의 인덱스 범위(양끝 포함, 없으면 None) —
+# core/globalplacement.py의 _region_index_range와 정확히 같은 공식이다(중복은 부득이함:
+# 그쪽을 여기서 import하면 계층이 뒤집힌다 — globalplacement.py가 이미 core.state를
+# 가져오므로). **바깥쪽으로 안 부풀린다** — 이게 2026-09-17판(_snap_box_to_grid)과의
+# 핵심 차이다. [lo,hi]가 격자에 안 맞으면 그 축 양끝의 부분 셀은 그냥 버려진다(예:
+# lo=350, cell=200이면 i=1(200~400)은 [350,400)만 [lo,hi] 안이라 완전 포함이 아니므로
+# i=2(400~600)부터 시작) — "포함 판정을 정확히 하면 스냅이 필요 없을 수 있다"는 제안을
+# 그대로 구현한 것. 이것만 쓰면 2026-09-17 falcon 문제(정렬 손실로 46% 실패)가 그대로
+# 재현된다는 것도 실측으로 확인했다(전용 스크립트: 407개 커플러 중 396개가 이걸로는
+# 부족). 그래서 이 함수 단독이 아니라 region()의 반복 확장(아래)과 항상 같이 쓴다 —
+# 모자라면 그만큼만 정확히 더 키우지, 애초에 여유분을 미리 얹어두지 않는다.
+def _cell_index_range(lo: float, hi: float, cell: float) -> tuple[int, int] | None:
+    i_lo = math.ceil(lo / cell - 1e-9)
+    i_hi = math.floor(hi / cell + 1e-9) - 1
+    if i_hi < i_lo:
+        return None
+    return int(i_lo), int(i_hi)
+
+
+# box(연속좌표, 격자에 안 맞아도 됨) 안에서 "완전히 포함되면서" 큐빗에 안 막힌 격자 셀
+# 개수. GP가 실제로 채울 수 있는 최대 세그먼트 수와 정확히 같은 값이다(다른 커플러의
+# 세그먼트 점유는 아직 모르므로 그만큼의 낙관치 — GP 단계에서 경합으로 더 줄 수 있다,
+# region()의 책임 밖). 반환값과 함께 실제 쓰인 셀 인덱스 범위(x_range, y_range)도
+# 돌려준다 — region()이 "충분하다" 판정 시 그 범위 그대로를 박스 좌표로 쓰기 위함
+# (다시 스냅할 필요가 없다 — 이미 셀 경계 그 자체다).
+def _count_free_cells_in_box(
+    coupler: "Coupler", box: tuple[float, float, float, float],
+    qubits: dict[int, "Qubit"], assignment: tuple[str, str] | None, cell: float,
+) -> tuple[int, tuple[int, int] | None, tuple[int, int] | None]:
+    x0, x1, y0, y1 = box
+    x_range = _cell_index_range(x0, x1, cell)
+    y_range = _cell_index_range(y0, y1, cell)
+    if x_range is None or y_range is None:
+        return 0, x_range, y_range
+    i0, i1 = x_range
+    j0, j1 = y_range
+    free = 0
+    for i in range(i0, i1 + 1):
+        for j in range(j0, j1 + 1):
+            cell_aabb = (i * cell, (i + 1) * cell, j * cell, (j + 1) * cell)
+            if not _cell_blocked_by_qubits(coupler, qubits, assignment, cell_aabb):
+                free += 1
+    return free, x_range, y_range
 
 
 @dataclass
@@ -148,6 +168,14 @@ class Coupler:
     # 둘 다 "배선이 차지하는 폭"이라는 같은 개념을 서로 다른 값으로 표현하고 있어서
     # 이 하나로 통합했다.
     meander_spacing_um: float
+
+    # region()이 필요 셀 수(self.num_segments) 위에 얹는 여유 비율. params.box_slack_ratio의
+    # description에 전체 경위(스윕 근거, 선택값)를 남겼다 — 요약: 2026-09-20 region()을
+    # 연속 면적 기준에서 격자 셀 개수 기준으로 바꾸면서 이전에 격자 스냅이 "우연히"
+    # 얹어주던 평균 1.82배 여유(GP의 다른 커플러와의 경합을 흡수하는 버퍼 역할을 겸했다)
+    # 가 사라져 경합 실패가 23건→71건으로 뛰었다 — 그 버퍼를 우연한 부산물이 아니라
+    # 이 명시적 파라미터로 대체한다.
+    box_slack_ratio: float
 
     # GP가 채우기 전엔 비어 있다 — 이 리스트의 유무 자체가 "세그먼트 배치 이전/이후" 단계 구분이 된다.
     segments: list[Segment] = field(default_factory=list)
@@ -265,53 +293,63 @@ class Coupler:
             pad = (self.segment_size_um - (y1 - y0)) / 2.0
             y0, y1 = y0 - pad, y1 + pad
 
-        # 3) 면적 하한: 필요 배선 면적(l * meander_spacing_um) 이상의 '가용 면적'이 되도록
-        #    반복 확장한다. 2026-09-20 own-qubit 예외를 포트 셀로 좁히기(coupler_own_port_cell)
-        #    전까지는 박스 전체 면적(w*h)만 required_wire_area와 비교했다 — 그런데 좁힌
-        #    뒤로는 박스 안에서 큐빗 몸체(자기 것도 포트 셀 제외, 제3자는 전부)가 차지한
-        #    면적이 실제로 세그먼트를 못 놓는 죽은 면적이 됐다. 그걸 안 빼고 w*h만 보면
-        #    박스가 "면적상 충분"해 보여도 실제 가용 면적은 모자라 GP가 못 채운다 — 실측:
-        #    박스당 평균 8.4~27.8%가 이렇게 죽은 면적이었고, GP 실패율이 2.6%→14.4%로
-        #    뛴 원인의 60%가 (경합이 아니라) 이 순수 용량부족이었다.
+        # 3) 셀 하한: GP가 실제로 놓아야 할 세그먼트 개수(self.num_segments) 이상의 '가용
+        #    격자 셀'이 되도록 반복 확장한다. 세 버전째다 — (i) 2026-09-20 최초판은 박스
+        #    전체 연속 면적(w*h)만 required_wire_area(=l*meander_spacing_um)와 비교했다.
+        #    (ii) own-qubit 예외를 포트 셀로 좁힌 뒤 큐빗 몸체가 차지한 면적을 빼고
+        #    반복 확장하도록 고쳤다(그 버전의 실측: 박스당 평균 8.4~27.8%가 죽은 면적).
+        #    그런데 (i)/(ii) 둘 다 호출부가 최종 박스를 격자에 "바깥쪽으로" 스냅했다
+        #    (_snap_box_to_grid) — 연속 면적 기준으로는 빠듯하게 맞춘 박스를 "격자에
+        #    맞다"는 이유만으로 사방으로 최대 반 칸씩 또 부풀린 것이다. 실측(2026-09-20
+        #    재조사): 최종 박스가 01_mainref 공식(sqrt(l*40)) 대비 평균 2.02배였는데,
+        #    그중 1.82배가 순수 이 바깥쪽 스냅 몫이고 (ii)의 차단면적 보정 자체는 평균
+        #    1.04배(중앙값 1.00배)로 거의 기여하지 않았다.
         #
-        #    "단변만 넓힌다"는 원래 근거(장변까지 늘리면 포트 바깥으로 삐져나감 — 포트
-        #    거리 1000, 필요 면적 1,098,000이면 양변을 늘릴 경우 장변이 1000→2343으로
-        #    벌어짐)는 그대로 유지한다. 반복이 필요한 이유는 늘린 단변이 새 큐빗(제3자)을
-        #    덮어써서 가용 면적이 기대만큼 안 늘 수 있기 때문이다 — 한 번에 계산한 목표
-        #    크기로는 부족해서, 매 반복 다시 막힌 면적을 재보고 남은 부족분만큼만 더 넓힌다.
+        #    이번(iii) 버전은 바깥쪽 스냅을 아예 없앤다. 매 반복 지금 박스([x0,x1]×
+        #    [y0,y1], 격자에 안 맞아도 됨) 안에 "완전히 포함되는" 셀만 세고
+        #    (_count_free_cells_in_box, core/globalplacement.py의 _region_index_range와
+        #    같은 공식 — 격자에 안 맞는 가장자리는 버려진다, 안 부풀린다), 그 개수가
+        #    충분하면 딱 그 셀들의 경계를 박스로 반환한다 — 더 못 준다("포함 판정을
+        #    정확히 하면 스냅이 필요 없을 수 있다"는 제안을 그대로 구현). 모자라면(대부분
+        #    2026-09-17 falcon 사례처럼 정렬 손실 때문 — 전수 조사 결과 407개 커플러 중
+        #    396개가 스냅 없이는 부족했다) 단변을 cell 한 칸만큼만 넓혀 다시 센다 —
+        #    "얼마나 부족한지"를 셀 단위로 직접 재므로, 필요한 만큼만 넓어지고 미리
+        #    여유를 얹어두지 않는다.
         #
-        #    수렴 실패(=이 위치엔 이 커플러가 들어갈 자리가 없음)를 두 조건으로 정의한다:
-        #    (a) _REGION_GROW_MAX_ITERS 안에 못 끝남(매번 새로 걸리는 제3자 큐빗에 먹히는
-        #    면적이 늘린 면적과 비슷해 수렴이 느림), (b) 확장이 die 경계를 넘어야 함(그
-        #    방향으로 die 안에 물리적으로 그만한 빈 면적 자체가 없음). 둘 다 None을
-        #    돌려준다 — 위 docstring 참고.
-        required_wire_area = self.l * self.meander_spacing_um
+        #    "단변만 넓힌다"는 원래 근거(장변까지 늘리면 포트 바깥으로 삐져나감)는 그대로
+        #    유지한다. 셀 개수는 정수라 부동소수 허용치가 필요 없다(이전 _REGION_AREA_EPS_UM2
+        #    는 연속 면적 비교의 반올림 잡음을 흡수하기 위한 것이었다 — 정수 비교로 바뀌며
+        #    그 잡음 자체가 사라졌다).
+        #
+        #    목표 셀 수는 self.num_segments가 아니라 그 위에 box_slack_ratio만큼 얹은
+        #    값이다(2026-09-20, 세 번째 재조사). 위 (iii)판을 처음 넣었을 때 own-qubit
+        #    차단 대비 "순수 용량부족" 실패는 13건→0건으로 완전히 없앴지만, 격자 스냅이
+        #    우연히 얹어주던 평균 1.82배 여유가 사라지며 다른 커플러와의 "경합" 실패가
+        #    23건→71건으로 뛰었다 — 그 여유가 부산물이 아니라 실제로 경합을 흡수하는
+        #    버퍼 역할을 겸하고 있었다는 뜻이다. params.box_slack_ratio(6칩 스윕 근거는
+        #    그 파라미터의 description 참고)로 그 버퍼를 명시적으로 되돌린다.
+        #    required_segments가 0이면(짧은 커플러) 1+ratio를 곱해도 ceil(0)=0이라
+        #    영향이 없다 — 애초에 세그먼트가 필요 없는 커플러에 여유를 줄 이유가 없으므로
+        #    이 자연스러운 동작을 그대로 둔다.
+        required_segments = math.ceil(self.num_segments * (1.0 + self.box_slack_ratio))
+        assignment = (port1, port2) if port1 is not None and port2 is not None else None
+        cell = self.segment_size_um
         for _ in range(_REGION_GROW_MAX_ITERS):
-            blocked = _region_blocked_area(self, (x0, x1, y0, y1), qubits, port1, port2)
-            available = (x1 - x0) * (y1 - y0) - blocked
-            deficit = required_wire_area - available
-            # _REGION_AREA_EPS_UM2만큼은 "사실상 다 채웠다"로 본다. w±add/2를 두 번(양쪽에)
-            # 적용하는 부동소수 연산은 이론상 available==required인 경계에서도 ~1e-10um²
-            # 수준의 반올림 잔차를 남길 수 있다(AABB_EPS_UM 주석이 설명하는 것과 같은 부류의
-            # 잡음) — 잔차가 남으면 다음 반복이 잔차만큼만 더 넓히려 하는데, 그 add가
-            # float 정밀도 이하로 뭉개져 박스가 조금도 안 바뀐 채 매 반복 같은 미세 부족을
-            # 반복하며 die 판정에 걸리지도, 수렴 판정을 통과하지도 못하고 그대로
-            # _REGION_GROW_MAX_ITERS를 다 태우는 무한 정체가 실측으로 확인됐다(grid_25
-            # 40개 중 12개가 이렇게 가짜로 "수렴 실패" 판정됐었다 — 실제로는 첫 확장에서
-            # 이미 사실상 다 채워져 있었다). 필요 면적 대비 극히 작은(1e-3um², 물리적으로
-            # 무의미한 크기) 절대 허용치라 실제 용량 부족(수백~수만um² 단위)을 감추지 않는다.
-            if deficit <= _REGION_AREA_EPS_UM2:
-                return (x0, x1, y0, y1)
+            n_free, x_range, y_range = _count_free_cells_in_box(
+                self, (x0, x1, y0, y1), qubits, assignment, cell,
+            )
+            if n_free >= required_segments and x_range is not None and y_range is not None:
+                i0, i1 = x_range
+                j0, j1 = y_range
+                return (i0 * cell, (i1 + 1) * cell, j0 * cell, (j1 + 1) * cell)
             w, h = x1 - x0, y1 - y0
             if w >= h:
-                add = deficit / w
-                new_y0, new_y1 = y0 - add / 2.0, y1 + add / 2.0
+                new_y0, new_y1 = y0 - cell / 2.0, y1 + cell / 2.0
                 if new_y0 < 0.0 or new_y1 > chip_height:
                     return None
                 y0, y1 = new_y0, new_y1
             else:
-                add = deficit / h
-                new_x0, new_x1 = x0 - add / 2.0, x1 + add / 2.0
+                new_x0, new_x1 = x0 - cell / 2.0, x1 + cell / 2.0
                 if new_x0 < 0.0 or new_x1 > chip_width:
                     return None
                 x0, x1 = new_x0, new_x1
@@ -453,6 +491,7 @@ class ChipState:
                 epsilon_r=params.substrate_epsilon_r,
                 meander_spacing_um=params.meander_spacing_um,
                 segment_size_um=params.segment_size_um,
+                box_slack_ratio=params.box_slack_ratio,
             )
             for idx, (q1, q2) in enumerate(cmap)
         }
