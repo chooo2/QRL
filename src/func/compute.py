@@ -1,6 +1,6 @@
 import math
 
-from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, Segment
+from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, Segment, coupler_own_port_cell
 from func.metric import Metric
 
 # QPlacer(Zhang et al., ISCA'25) Eq.15와 동일한 디튜닝 임계값(GHz).
@@ -220,19 +220,25 @@ def compute_drc(
 
     num_unplaced_couplers = _num_unplaced_couplers(state)
 
-    # 큐빗-세그먼트 겹침(자기 큐빗 제외 — Coupler.is_own_qubit()로 통일. core/
-    # globalplacement.py의 GP 장애물 판정도 같은 함수를 쓴다, 두 곳에 따로 구현하면 또
-    # 어긋난다). 2026-09-17 이전엔 bbox() 기준이었다 — compute_coupler_cross_point 위
-    # 주석과 같은 이유로 개별 세그먼트 기준으로 바꿨다: bbox가 큐빗 위를 가로지르면 실제
-    # 세그먼트는 안 건드려도 위반으로 잡히는 헛경보가 났다.
+    # 큐빗-세그먼트 겹침(자기 큐빗의 배정 포트 근처만 제외 — core.state.coupler_own_port_cell()
+    # 로 통일. core/globalplacement.py의 GP 장애물 판정도 같은 함수를 쓴다, 두 곳에 따로
+    # 구현하면 또 어긋난다). 2026-09-17 이전엔 bbox() 기준이었다 — compute_coupler_cross_point
+    # 위 주석과 같은 이유로 개별 세그먼트 기준으로 바꿨다: bbox가 큐빗 위를 가로지르면 실제
+    # 세그먼트는 안 건드려도 위반으로 잡히는 헛경보가 났다. 2026-09-20: 자기 큐빗이면 몸체
+    # 전체를 봐주던 예외를 "배정 포트 근처 셀만"으로 좁혔다 — 실측 결과 세그먼트가 포트
+    # 근처가 아니라 큐빗 중심 코앞(반폭의 최대 91%)까지 파고들었다
+    # (docs/20260920_segment_model_review.md 발견 3). 이제 그 정도의 몸체 내부 겹침은
+    # qc_overlap 위반으로 잡힌다.
     qc_overlap = 0
     for coupler, seg in _all_segments(state):
         sbox = _segment_aabb(coupler, seg)
+        assignment = state.port_assignment.get((coupler.q1, coupler.q2))
         for i, q in state.qubits.items():
-            if coupler.is_own_qubit(i):
+            if not _aabb_overlap(sbox, _qubit_aabb(q)):
                 continue
-            if _aabb_overlap(sbox, _qubit_aabb(q)):
-                qc_overlap += 1
+            if coupler_own_port_cell(coupler, i, q, assignment, sbox):
+                continue
+            qc_overlap += 1
 
     if edge_cross_point is None:
         edge_cross_point = compute_edge_cross_point(state)

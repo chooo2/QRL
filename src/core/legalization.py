@@ -15,8 +15,11 @@ DRC 정의는 func/compute.py의 compute_drc를 따르되(2026-09-17 결정 사�
   - clearance는 zero-margin이다. 01_mainref의 qc_min_gap_um=500(QPlacer d_q=400+d_r=100)
     은 그 원문이 스스로 "aggressively set"이라고 밝힌 값이라 도입하지 않는다 — 물리적
     근거가 따로 생기면 그때 추가한다.
-  - 자기 큐빗 예외는 Coupler.is_own_qubit()로 판정한다(GP의 장애물 판정, compute_drc의
-    qc 판정과 동일한 정의 — 세 곳이 각자 구현하면 또 어긋난다).
+  - 자기 큐빗 예외는 core.state.coupler_own_port_cell()로 판정한다(GP의 장애물 판정,
+    compute_drc의 qc 판정과 동일한 정의 — 세 곳이 각자 구현하면 또 어긋난다). 2026-09-20
+    이전엔 자기 큐빗이면 몸체 전체를 봐줬는데, 실측 결과 세그먼트가 포트 근처가 아니라
+    큐빗 중심 코앞까지 파고들었다(docs/20260920_segment_model_review.md 발견 3) — 배정
+    포트 근처 셀만 예외로 좁혔다.
 
 GP에서 세그먼트를 하나도 못 놓은 커플러(segments=[])는 LG가 다시 배치하지 않는다 — 세그먼트
 배치는 GP의 일이고, LG는 "이미 놓인 것들의 위반을 최소 변위로 없애는" 역할로 한정한다.
@@ -32,7 +35,7 @@ import logging
 import math
 from dataclasses import replace
 
-from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, Segment
+from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, Segment, coupler_own_port_cell
 from core.floorplan import count_crossings, sort_edges
 from core.globalplacement import (
     _cell_blocked, _die_max_index, _qubit_owner_cells, _region_index_range,
@@ -68,7 +71,7 @@ class Legalization:
         oob_q = _find_qubit_oob(state.qubits, chip_w, chip_h)
         qq = _find_qq_overlaps(state.qubits)
         oob_s = _find_seg_oob(state.couplers, chip_w, chip_h)
-        qc = _find_qc_overlaps(state.qubits, state.couplers)
+        qc = _find_qc_overlaps(state.qubits, state.couplers, state.port_assignment)
         cc = _find_cc_overlaps(state.couplers)
         n_unplaced = sum(1 for c in state.couplers.values() if c.num_segments > 0 and not c.segments)
 
@@ -134,7 +137,8 @@ class Legalization:
             old_cell = _seg_cell(seg, cell)
             segment_occupied.discard(old_cell)
             new_cell = _nearest_free_cell_in_box(
-                (seg.x, seg.y), box, cell, coupler, qubit_owner, segment_occupied, i_max, j_max,
+                (seg.x, seg.y), box, cell, coupler, qubits, state.port_assignment.get(key),
+                qubit_owner, segment_occupied, i_max, j_max,
             )
             if new_cell is None:
                 segment_occupied.add(old_cell)
@@ -250,16 +254,19 @@ def _find_seg_oob(
 
 def _find_qc_overlaps(
     qubits: dict[int, Qubit], couplers: dict[tuple[int, int], Coupler],
+    port_assignment: dict[tuple[int, int], tuple[str, str]],
 ) -> list[tuple[tuple[int, int], int, int]]:
     out = []
     for key, c in couplers.items():
+        assignment = port_assignment.get(key)
         for s in c.segments:
             sbox = _segment_aabb(c, s)
             for qid, q in qubits.items():
-                if c.is_own_qubit(qid):
+                if not _aabb_overlap(sbox, _qubit_aabb(q)):
                     continue
-                if _aabb_overlap(sbox, _qubit_aabb(q)):
-                    out.append((key, s.idx, qid))
+                if coupler_own_port_cell(c, qid, q, assignment, sbox):
+                    continue
+                out.append((key, s.idx, qid))
     return sorted(out)
 
 
@@ -348,7 +355,8 @@ def _crossing_safe(
 # 검증 참고) 전수 탐색해도 비용이 무시할 수준이다.
 def _nearest_free_cell_in_box(
     cur_xy: tuple[float, float], box: tuple[float, float, float, float], cell: float,
-    coupler: Coupler, qubit_owner: dict[tuple[int, int], set[int]],
+    coupler: Coupler, qubits: dict[int, Qubit], assignment: tuple[str, str] | None,
+    qubit_owner: dict[tuple[int, int], set[int]],
     segment_occupied: set[tuple[int, int]], i_max: int, j_max: int,
 ) -> tuple[int, int] | None:
     ri = _region_index_range(box[0], box[1], cell, i_max)
@@ -364,7 +372,7 @@ def _nearest_free_cell_in_box(
     best_cell = None
     for i in range(i0, i1 + 1):
         for j in range(j0, j1 + 1):
-            if _cell_blocked(coupler, (i, j), qubit_owner, segment_occupied):
+            if _cell_blocked(coupler, (i, j), cell, qubits, assignment, qubit_owner, segment_occupied):
                 continue
             d = (i - ci) ** 2 + (j - cj) ** 2
             if best_d is None or d < best_d:

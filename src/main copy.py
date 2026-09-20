@@ -41,21 +41,7 @@ SAVE_LOG = False
 
 def main(params):
     """ Preprocessing """
-    stages = ("FP", "GP", "LG", "DP", "Finish")
-    runtimes: dict[str, dict[str, float]] = {}
-
-    def run_stage(stage_name, stage, states):
-        """Run one stage per benchmark so its runtime can be reported separately."""
-        output = []
-        for state in states:
-            tt = time.perf_counter()
-            result = stage.run([state])
-            runtimes.setdefault(state.processor_name, {})[stage_name] = (
-                time.perf_counter() - tt
-            )
-            output.extend(result)
-        return output
-
+    run: dict[str, float] = {}
     parser = Parser()
     bench = parser.load_configs(params.processors)
     logging.info("Processors: %s" % [c['processor'] for c in bench])
@@ -64,8 +50,10 @@ def main(params):
 
 
     """ Floorplanning """
+    tt = time.perf_counter()
     fp = Floorplan(params)
-    fp_state = run_stage("FP", fp, init_state)
+    fp_state = fp.run(init_state)
+    run["FP"] = time.perf_counter() - tt
     # log_chip_states("FP", fp_state)
     for name, reason in fp.skipped:
         logging.warning("[FP] skipped %s: %s", name, reason)
@@ -73,29 +61,37 @@ def main(params):
 
     """ Global Placement"""
 ### 전반적인 배치 최적화 --> Planarity, Crosstalk, Wirelength, Congestion
+    tt = time.perf_counter()
     gp = GlobalPlacement(params)
-    gp_state = run_stage("GP", gp, fp_state)
+    gp_state = gp.run(fp_state)
+    run["GP"] = time.perf_counter() - tt
     # log_chip_states("GP", gp_state)
 
 
     """ Legalization """
 ### Overlap 해소
+    tt = time.perf_counter()
     lg = Legalization(params)
-    lg_state = run_stage("LG", lg, gp_state)
+    lg_state = lg.run(gp_state)
+    run["LG"] = time.perf_counter() - tt
     # log_chip_states("LG", lg_state)
 
 
     """ Detailed Placement """
 ### Hotspot이 가장 심한 위치 파악 후, 미세 조정
+    tt = time.perf_counter()
     dp = DetailedPlacement(params)
-    dp_state = run_stage("DP", dp, lg_state)
+    dp_state = dp.run(lg_state)
+    run["DP"] = time.perf_counter() - tt
     # log_chip_states("DP", dp_state)
 
 
     """ Routing """
 ### Routing, Finish단계
+    tt = time.perf_counter()
     rt = Router(params)
-    rt_state = run_stage("Finish", rt, dp_state)
+    rt_state = rt.run(dp_state)
+    run["Finish"] = time.perf_counter() - tt
 
 
     """ Basic Rendering """
@@ -127,22 +123,8 @@ def main(params):
             logging.info("[Evaluation][%s][%s]", stage, state.processor_name)
             metric.log_result()
 
-    header = ["Benchmark", *stages, "Total"]
-    widths = [max(len(header[0]), *(len(c["processor"]) for c in bench)), 8, 8, 8, 8, 8, 9]
-    print("\nRuntime by benchmark (sec)")
-    print(" | ".join(f"{column:>{width}}" for column, width in zip(header, widths)))
-    print("-+-".join("-" * width for width in widths))
-    for benchmark in [c["processor"] for c in bench]:
-        benchmark_runtimes = runtimes.get(benchmark, {})
-        values = [benchmark_runtimes.get(stage) for stage in stages]
-        total = sum(value for value in values if value is not None)
-        formatted = [
-            f"{value:{width}.3f}" if value is not None else f"{'-':>{width}}"
-            for value, width in zip(values, widths[1:-1])
-        ]
-        print(" | ".join([
-            f"{benchmark:>{widths[0]}}", *formatted, f"{total:{widths[-1]}.3f}"
-        ]))
+    run["total"] = sum(run.values())
+    for p, r in run.items(): logging.info("%-20s : %.3f sec", p, r)
 
 
 

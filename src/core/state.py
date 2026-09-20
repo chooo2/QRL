@@ -84,6 +84,31 @@ class Coupler:
     # GP가 채우기 전엔 비어 있다 — 이 리스트의 유무 자체가 "세그먼트 배치 이전/이후" 단계 구분이 된다.
     segments: list[Segment] = field(default_factory=list)
 
+    # RT(core/router.py)가 확정하는 실제 배선 경로 — q1의 배정 포트에서 시작해 q2의 배정
+    # 포트로 끝나는 절대좌표(um) 꺾은선(polyline). RT 이전엔 비어 있다(segments와 같은 패턴:
+    # 리스트의 유무 자체가 "라우팅 이전/이후" 구분). RT가 경로를 못 찾은 커플러도 빈 리스트로
+    # 남는다 — 그래서 "RT 이후 waypoints == []"는 실패를 뜻하고(segments가 있는 한 RT는
+    # 항상 시도하므로 성공/실패가 모호하지 않다), Router.run()이 실패 사유를 별도로 기록한다.
+    # 좌표 리스트(순수 (x,y) 튜플)로 둔 이유: (1) 렌더링(utils/rendering.py)이 바로 꺾은선으로
+    # 그릴 수 있고, (2) qiskit-metal 변환 시 RoutePathfinder/RouteAnchors류(명시적 anchor
+    # 좌표를 받는 라우터)에 그대로 넘길 수 있다 — RouteMeander(total_length 기반 자동 라우팅)
+    # 대신 이쪽을 쓰는 게 이 필드의 존재 이유(RT가 직접 계산한 실제 경로)와 맞는다.
+    waypoints: list[tuple[float, float]] = field(default_factory=list)
+
+    @property
+    def route_length(self) -> float:
+        # waypoints 꺾은선의 총 길이(um) — l(목표 반파장 길이)과 비교해 길이 오차를 구할 때 쓴다.
+        # 세그먼트 크기(l)와 달리 이건 RT가 실제로 만든 경로의 관측값이라 property로 둔다
+        # (route_length == l이라는 보장은 없다 — RT가 미앤더로 채워도 회랑이 좁으면 못 채울 수
+        # 있고, 그 오차 자체가 core/router.py의 검증 지표다).
+        if len(self.waypoints) < 2:
+            return 0.0
+        return sum(
+            math.hypot(self.waypoints[i + 1][0] - self.waypoints[i][0],
+                       self.waypoints[i + 1][1] - self.waypoints[i][1])
+            for i in range(len(self.waypoints) - 1)
+        )
+
     @property
     def l(self) -> float:
         # λ/2 CPW 공진기 길이. 실효 유전율 근사 eps_eff = (eps_r + 1)/2 는 마이크로스트립
@@ -105,14 +130,16 @@ class Coupler:
     def make_segments(self) -> list[Segment]:
         return [Segment(idx=i) for i in range(self.num_segments)]
 
-    # 이 큐빗이 커플러 자신의 양 끝(q1 또는 q2)인지. 커플러는 물리적으로 자기 큐빗의 포트에
-    # 패드로 붙어야 하므로 그 겹침은 설계상 정상이다 — func/compute.py의 compute_drc가
-    # qc DRC 위반 판정에서 이 경우를 제외하는 근거이자(2026-09-16 이전부터 있던 로직),
-    # core/globalplacement.py의 GP가 세그먼트를 놓을 때 자기 큐빗 셀을 장애물에서 빼는
-    # 근거이기도 하다(2026-09-17 추가 — 그 전엔 GP만 이 규칙을 안 따라서 박스 용량을
-    # 과소평가했다: 실패 커플러의 점유 셀 중 95.8%가 실제로는 이 own-qubit 겹침이었다).
-    # 두 군데가 각자 `i in (self.q1, self.q2)`를 따로 짜면 언젠가 또 어긋나므로, 판정을
-    # 여기 하나로 모아 양쪽이 같은 정의를 참조하게 한다.
+    # 이 큐빗이 커플러 자신의 양 끝(q1 또는 q2)인지. 자기 큐빗이라는 사실 하나만으로 "장애물
+    # 아님"을 보장하지는 않는다 — 2026-09-20까지는 그렇게 썼지만(자기 큐빗이면 몸체 전체를
+    # 허용), 실측 결과 세그먼트가 포트 근처가 아니라 큐빗 중심 코앞(반폭 200um의 최대 91%인
+    # 182um)까지, 칩당 1~28개는 몸체 안에 완전히 파묻히는 것으로 나왔다
+    # (docs/20260920_segment_model_review.md 발견 3). 물리적으로 큐빗 몸체는 금속(포켓/패드/
+    # 조셉슨 접합)이라 배선이 그 위를 지나갈 수 없다 — 커플러가 실제로 필요로 하는 건 배정된
+    # 포트 한 점(패드) 접촉뿐이다. 그래서 "장애물 아님" 판정은 이제 이 메서드(자기 큐빗인가)
+    # 단독이 아니라 coupler_own_port_cell()(자기 큐빗이면서 배정 포트 근처인가)로 대체됐다 —
+    # 이 메서드 자체는 coupler_own_port_cell() 내부에서, 그리고 다른 "이 큐빗이 내 소유인가"
+    # 판정이 필요한 곳(예: hotspot 계산에서 직결 커플러 제외)에서 여전히 쓰인다.
     def is_own_qubit(self, qubit_id: int) -> bool:
         return qubit_id == self.q1 or qubit_id == self.q2
 
@@ -197,6 +224,63 @@ class Coupler:
     def __str__(self):
         return (f"id={self.id:>3d} q1={self.q1:>3d} q2={self.q2:>3d} "
                 f"f={self.f:>5.2f}GHz segments={len(self.segments)}")
+
+
+# 큐빗-세그먼트 "장애물 아님" 판정의 유일한 정의 (2026-09-20, is_own_qubit 단독 사용을
+# 대체, 같은 날 점-포함 판정으로 재수정 — 아래 "판정 방식" 항목 참고). aabb(세그먼트
+# 하나 또는 GP 격자 셀 하나의 (x0,x1,y0,y1))가 qubit_id의 소유이고, 그 큐빗에서 coupler에게
+# 배정된 포트 점(px,py)을 담고 있으면 정상(장애물 아님) — 그 밖의 자기 큐빗 겹침(몸체
+# 내부)은 이제 장애물/위반으로 센다.
+#
+# 이전(포트 무관, 자기 큐빗이면 몸체 전체 허용) 대비 좁힌 이유: 큐빗 몸체는 실제로는
+# 금속(TransmonPocket 포켓/패드/조셉슨 접합)이라 배선이 그 위를 지날 수 없다 — 커플러가
+# 필요로 하는 건 배정 포트 한 점(패드) 접촉뿐이다. 실측(GP 산출물, DP 이전) 결과 이전
+# 규칙 아래서 세그먼트가 포트 근처가 아니라 큐빗 중심 코앞까지(반폭 200um의 최대 91%인
+# 182um) 파고들었고, 칩당 1~28개는 몸체 안에 완전히 들어가 있었다
+# (docs/20260920_segment_model_review.md 발견 3).
+#
+# 판정 방식(점-포함, cell_size 매개변수 제거): 처음 버전은 "aabb가 포트 중심의
+# cell_size 정사각형과 겹치는가"(사각형-사각형 AABB 겹침)였다. 그런데 그 포트-중심
+# 정사각형은 GP의 전역 격자에 정렬돼 있지 않다(포트 좌표가 FP 최적화 결과라 격자
+# 배수가 아님) — 격자 정렬 사각형(aabb)과 비정렬 사각형이 겹치는지를 물으면, 포트를
+# 담은 격자 셀뿐 아니라 그 옆의(때로는 대각선의) 인접 셀까지 "겹친다"고 잡힌다. 실측
+# (6칩, 이 수정 직전): 자기 큐빗과 겹치는 것으로 "허용된" 세그먼트 중 30~46%가 실제로는
+# 포트를 담은 셀이 아니라 이 기하학적 누출로 통과한 인접 셀이었고, 그중 일부는 배정
+# 포트에서 최대 277um(셀 크기 200um의 1.4배) 떨어진, 큐빗 몸체 안에 완전히 파묻힌
+# 셀이었다 — "포트 셀 하나만 허용"이라는 애초 의도를 사각형 겹침 판정이 지키지 못한
+# 것이다. 점-포함 판정("aabb가 포트 점을 담는가")으로 바꾸면 포트 좌표가 어디에 있든
+# 항상 정확히 그 점을 담은 격자 셀 하나만 골라내므로(포트 자체가 큐빗 경계(±w/2)
+# 위에 있어 그 셀은 거의 항상 경계에 걸친 셀이 된다) 이 누출이 구조적으로 불가능해진다.
+# 그래서 cell_size 매개변수 자체를 없앴다(더 이상 쓰이지 않음).
+#
+# core/globalplacement.py(GP의 장애물 판정, `_cell_blocked`), func/compute.py
+# (`compute_drc`의 qc 판정), core/legalization.py(`_find_qc_overlaps`) 셋 다 이 함수
+# 하나만 쓴다 — 이 판정을 여러 곳에서 각자 구현하면 GP가 "놓을 수 있다"고 판단한 배치를
+# DRC가 "위반"으로 다시 잡아내는(또는 그 반대) 모순이 생긴다(같은 부류의 실수를
+# core/legalization.py 모듈 docstring이 AABB_EPS_UM에 대해 이미 경고한 바 있다).
+#
+# assignment가 None이면(이론상 GP/LG 호출부에서 세그먼트가 있는 커플러는 항상 배정도
+# 있으므로 도달 불가능, 방어적 분기) 포트를 알 수 없으니 항상 장애물로 취급한다 — "판단
+# 못 하면 안전하게 막는다"는 이 저장소의 일관된 원칙(예: Coupler.region()의 방어적
+# ValueError)과 같다.
+#
+# 반개구간([x0,x1), [y0,y1))으로 담는다 — core/globalplacement.py의 _qubit_owner_cells가
+# 격자 셀을 같은 방식(floor 기반, 오른쪽/위쪽 경계 미포함)으로 다루는 것과 규칙을
+# 맞춘 것이다. 포트 좌표가 부동소수 최적화 결과라 셀 경계선에 정확히 걸칠 확률은
+# 사실상 0이므로 이 선택이 실측 결과에 영향을 주지는 않는다.
+def coupler_own_port_cell(
+    coupler: "Coupler", qubit_id: int, qubit: "Qubit",
+    assignment: tuple[str, str] | None, aabb: tuple[float, float, float, float],
+) -> bool:
+    if not coupler.is_own_qubit(qubit_id):
+        return False
+    if assignment is None:
+        return False
+    port_name = assignment[0] if qubit_id == coupler.q1 else assignment[1]
+    px, py = qubit.ports[port_name]
+    ax0, ax1, ay0, ay1 = aabb
+    return ax0 <= px < ax1 and ay0 <= py < ay1
+
 
 @dataclass
 class ChipState:

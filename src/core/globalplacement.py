@@ -23,19 +23,28 @@ GP의 하드 탐색 범위다), GP는 그 박스 밖으로 한 걸음도 안 나
 흩어질 수 있었다(체인 인접 쌍 8~13%가 먼 "점프"였던 것도 그 결과) — 박스를 하드 제약으로
 못박으면 애초에 그런 흩어짐 자체가 구조적으로 불가능해진다.
 
-장애물 판정(Coupler.is_own_qubit 기준, 2026-09-17 추가): 커플러 박스는 자기 큐빗의 포트에서
-시작하므로 자기 자신의 q1/q2 풋프린트와 겹치는 건 정상이다(패드 연결) — func/compute.py의
-compute_drc도 qc DRC에서 이 경우를 제외한다. GP도 같은 정의를 써서 자기 큐빗 셀은 장애물에서
-뺀다 — 이전엔 GP만 이 규칙을 안 따라서(모든 큐빗을 무차별로 차단) 박스 용량을 체계적으로
-과소평가했다: 실패했던 커플러의 점유 셀 중 95.8%가 실은 이 own-qubit 겹침이었고, 이 예외를
-넣자 실패율이 27.3%에서 크게 줄었다(정확한 수치는 이 모듈을 부른 검증 스크립트/문서 참고).
+장애물 판정(core.state.coupler_own_port_cell 기준): 커플러 박스는 자기 큐빗의 포트에서
+시작하므로 그 포트 근처와 겹치는 건 정상이다(패드 연결) — func/compute.py의 compute_drc도
+qc DRC에서 이 경우를 제외한다(둘 다 같은 함수 하나만 쓴다). GP는 그 정의로 자기 큐빗 셀을
+장애물에서 뺀다.
+
+이 예외의 범위가 두 번 바뀌었다. (1) 2026-09-17: 그 전엔 GP가 모든 큐빗을 무차별로
+차단해 박스 용량을 체계적으로 과소평가했다 — 실패했던 커플러의 점유 셀 중 95.8%가 실은
+own-qubit 겹침이었고, "자기 큐빗은 전부 허용"으로 고치자 실패율이 27.3%에서 크게 줄었다.
+(2) 2026-09-20: "자기 큐빗은 전부 허용"이 너무 관대했다는 게 드러났다 — 실측 결과
+세그먼트가 포트 근처가 아니라 큐빗 중심 코앞(반폭 200um의 최대 91%인 182um)까지 파고들었고,
+칩당 1~28개는 몸체 안에 완전히 들어가 있었다(docs/20260920_segment_model_review.md 발견
+3). 큐빗 몸체는 실제로는 금속이라 배선이 지날 수 없다 — 그래서 예외를 "배정 포트 근처
+셀만"으로 다시 좁혔다(coupler_own_port_cell). 이 좁힘은 (1)이 넓혀준 용량의 일부를 다시
+가져가므로 실패율이 다시 오를 것으로 예상된다 — 정확한 수치는 이 변경의 커밋/보고
+메시지에 남긴다.
 """
 import logging
 import math
 import random
 from dataclasses import replace
 
-from core.state import ChipState, Coupler, Qubit, Segment
+from core.state import ChipState, Coupler, Qubit, Segment, coupler_own_port_cell
 
 
 # 세그먼트를 둘 자리를 끝내 못 찾은 커플러가 하나둘 있는 건 정상적인 부분 실패로 다룬다
@@ -146,13 +155,18 @@ def _qubit_owner_cells(
 
 
 # cell이 이 커플러에게 장애물인지. 다른 커플러의 세그먼트는 무조건 장애물이다(segment_occupied
-# 는 이미 그 시점까지 놓인 것만 들어있음). 큐빗은 Coupler.is_own_qubit()로 자기 큐빗을 뺀
-# 나머지가 하나라도 걸리면 장애물이다 — func/compute.py의 compute_drc가 qc DRC에서 쓰는
-# 것과 동일한 정의(Coupler.is_own_qubit 참고)라 여기서 "자기 큐빗도 장애물"로 잘못 세면
-# 그 정의와 어긋난 채로 박스 용량을 실제보다 작게 계산하게 된다(2026-09-17 이전 버전의
-# 버그 — 실패 커플러의 점유 셀 95.8%가 실은 own-qubit 겹침이었다).
+# 는 이미 그 시점까지 놓인 것만 들어있음). 큐빗은 core.state.coupler_own_port_cell()로
+# "자기 큐빗이면서 배정 포트 근처"인 경우만 제외한다 — func/compute.py의 compute_drc가
+# qc DRC에서 쓰는 것과 정확히 같은 함수라, 여기서 "놓을 수 있다"고 판단한 배치를 DRC가
+# 다시 "위반"으로 잡아내는 모순이 생기지 않는다. 2026-09-20 이전엔 자기 큐빗이면 몸체
+# 전체를 허용했는데, 실측 결과 세그먼트가 큐빗 중심 코앞까지 파고들었다
+# (docs/20260920_segment_model_review.md 발견 3) — coupler_own_port_cell()로 좁힌 이유는
+# 그 함수 자체의 docstring 참고. 이 좁힘으로 GP의 박스 용량이 다시 줄어든다(예전 own-qubit
+# 확장이 실패율을 27.3%→2.6%로 낮췄던 것의 부분적 반대 방향) — 그만큼 실패율이 다시
+# 오를 것으로 예상되고, 실측치는 이 변경의 커밋/보고 메시지에 남긴다.
 def _cell_blocked(
-    coupler: Coupler, cell_xy: tuple[int, int],
+    coupler: Coupler, cell_xy: tuple[int, int], cell: float,
+    qubits: dict[int, Qubit], assignment: tuple[str, str] | None,
     qubit_owner: dict[tuple[int, int], set[int]], segment_occupied: set[tuple[int, int]],
 ) -> bool:
     if cell_xy in segment_occupied:
@@ -160,7 +174,11 @@ def _cell_blocked(
     blockers = qubit_owner.get(cell_xy)
     if not blockers:
         return False
-    return any(not coupler.is_own_qubit(qid) for qid in blockers)
+    cell_aabb = (cell_xy[0] * cell, (cell_xy[0] + 1) * cell, cell_xy[1] * cell, (cell_xy[1] + 1) * cell)
+    return any(
+        not coupler_own_port_cell(coupler, qid, qubits[qid], assignment, cell_aabb)
+        for qid in blockers
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -265,8 +283,9 @@ def _boustrophedon_cells(
 
 # 커플러 하나의 세그먼트 체인을 배치한다. 박스(FP가 확정한 coupler_regions[key]) 안에서만
 # 찾는다 — 밖으로 넓히는 재시도는 없다(2단계 구조: 박스를 넓히는 건 FP의 권한이지 GP의
-# 권한이 아니다). 장애물 판정은 _cell_blocked()(자기 큐빗 제외, 제3 큐빗·다른 커플러
-# 세그먼트는 포함)로 한다. 성공하면 Segment 리스트를 돌려주고 segment_occupied를 그
+# 권한이 아니다). 장애물 판정은 _cell_blocked()(자기 큐빗의 배정 포트 근처만 제외, 그
+# 밖의 자기 큐빗 몸체·제3 큐빗·다른 커플러 세그먼트는 전부 포함)로 한다. 성공하면
+# Segment 리스트를 돌려주고 segment_occupied를 그
 # 셀들만큼 갱신한다(호출부가 따로 갱신할 필요 없음 — qubit_owner는 애초에 커플러가 안
 # 바꾸므로 갱신 대상이 아니다). 실패하면 아무것도 건드리지 않고 None을 돌려준다 — 이때
 # "실패"는 이 박스 하나에 국한된 사실이라, 같은 박스를 먼저 차지한 다른 커플러의 세그먼트를
@@ -293,7 +312,7 @@ def _place_chain(
     j_max = _die_max_index(chip_h, cell)
 
     cells = _boustrophedon_cells(x0, x1, y0, y1, p1, cell, i_max, j_max)
-    free = [c for c in cells if not _cell_blocked(coupler, c, qubit_owner, segment_occupied)]
+    free = [c for c in cells if not _cell_blocked(coupler, c, cell, qubits, assignment, qubit_owner, segment_occupied)]
     if len(free) < k:
         return None
 
