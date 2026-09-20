@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use('Agg')  # headless — main.py는 디스플레이 없는 환경(서버)에서도 돌아가야 한다
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.colors import hsv_to_rgb
+from matplotlib.colors import hsv_to_rgb, to_rgba
 
 from core.router import find_crossing_legs
 from core.state import ChipState
@@ -219,14 +219,16 @@ class Rendering:
     # FP가 assign_ports 직후 확정한 배치 후보 영역(ChipState.coupler_regions) — GP 이전
     # (output/0_FP/)에도 이미 존재하고, GP 이후로는 GP의 하드 탐색 범위 그 자체가 된다.
     # 옅은 채움 + 점선으로, 그 안에 그려질 세그먼트/bbox()보다 눈에 덜 띄게 깔아 둔다.
+    # 테두리는 채움과 다른(더 짙은) 회색+alpha를 쓴다 — Rectangle에 공용 alpha= 하나만
+    # 주면 테두리도 채움과 같은 옅은 투명도를 먹어 경계가 거의 안 보였다. facecolor/
+    # edgecolor를 각각 RGBA(to_rgba)로 만들어 넘기면 그 둘을 독립적으로 조절할 수 있다.
     def _draw_coupler_box(self, ax, chip: ChipState, box):
         x0, x1, y0, y1 = box
         oob = not self._in_die(x0, x1, y0, y1, chip)
         ax.add_patch(patches.Rectangle(
             (x0, y0), x1 - x0, y1 - y0,
-            facecolor=_OOB_COLOR if oob else "#999999",
-            alpha=0.15 if oob else 0.07,
-            edgecolor=_OOB_COLOR if oob else "#999999",
+            facecolor=to_rgba(_OOB_COLOR if oob else "#999999", 0.15 if oob else 0.07),
+            edgecolor=to_rgba(_OOB_COLOR if oob else "#555555", 0.15 if oob else 0.6),
             linewidth=1.2 if oob else 0.6,
             linestyle=":", zorder=6 if oob else 1,
         ))
