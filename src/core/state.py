@@ -282,8 +282,26 @@ class Coupler:
         # 1) 두 포트를 반드시 덮는 최소 AABB (대각선이어도 x/y 각 축을 직접 min/max로 잡으므로
         #    항상 두 점을 포함한다 — 이전 버전은 abs(dy) > abs(dx)로 축 하나만 골라 나머지
         #    축에서 포트를 놓치는 버그가 있었다).
+        #
+        #    격자 배수로 바깥쪽 스냅한다(포트당 최대 반 칸). 2026-09-20(연속 면적 대신
+        #    격자 셀 개수를 직접 세도록 바꾼 버전) 이후로 3)단계가 "완전히 포함된 셀만"
+        #    센다(_count_free_cells_in_box, _cell_index_range) — 이 스냅이 없으면 포트
+        #    좌표 자체가 박스의 원 경계(x0 또는 x1)가 되어, 그 포트가 속한 셀이 "완전히
+        #    포함"되지 못하고 박스에서 통째로 잘려나갈 수 있다. 실측(grid_25 커플러
+        #    (16,17)): 포트가 (3582.5, 6882.5)인데 박스가 x0=3600부터 시작해(포트
+        #    좌표보다 안쪽) 그 포트의 셀이 박스의 유효 셀 범위 밖으로 밀려났고, GP의
+        #    경로 탐색(_place_chain)이 "포트 셀이 박스 밖"으로 보고 첫 걸음부터 실패했다
+        #    — grid_25 40개 중 21개가 이 버그 하나로 실패했다. 이 스냅은 여유를 더
+        #    주려는 게 아니라 "포트가 속한 셀은 반드시 박스 안에 있어야 한다"는 최소
+        #    요구를 맞추는 보정이다 — 축당 최대 반 칸(segment_size_um/2)만 넓어지므로,
+        #    이전 라운드에서 없앤 "성장 후 박스 전체를 네 변 다 바깥으로 스냅"(반복마다
+        #    누적돼 최종 1.82배까지 불어났던 것)과는 규모가 다르다.
         x0, x1 = min(p1[0], p2[0]), max(p1[0], p2[0])
         y0, y1 = min(p1[1], p2[1]), max(p1[1], p2[1])
+        x0 = math.floor(x0 / self.segment_size_um) * self.segment_size_um
+        x1 = math.ceil(x1 / self.segment_size_um) * self.segment_size_um
+        y0 = math.floor(y0 / self.segment_size_um) * self.segment_size_um
+        y1 = math.ceil(y1 / self.segment_size_um) * self.segment_size_um
 
         # 2) 각 변 하한: segment_size_um — 그보다 좁으면 세그먼트(정사각형)가 물리적으로 안 들어간다.
         if x1 - x0 < self.segment_size_um:

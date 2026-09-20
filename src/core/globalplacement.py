@@ -13,8 +13,21 @@ floorplan.py 모듈 docstring 참고.
 
 세그먼트는 커플러 하나당 체인(idx 0..k-1)으로, FP가 확정해 둔 배치 후보 영역
 (ChipState.coupler_regions, core/floorplan.py의 assign_ports 직후 Coupler.region()으로
-계산됨)을 지그재그(boustrophedon)로 채워 넣는다 — CPW meander가 실제로 짧은 변 방향으로
-접히며 넓게 퍼지는 물리적 모양(region()의 자체 주석과 동일 근거)을 격자 위에서 흉내낸 것이다.
+계산됨) 안에서 **q1의 포트 셀 -> q2의 포트 셀로 이어지는, 4-인접한 단순 경로**를 찾아
+채운다(_find_chain_path). RT(core/router.py v3)가 이제 Segment.idx 순서를 그대로 이어
+꺾은선을 만들기 때문에(셀 안에서 접지 않는다 — QPlacer Figure 8(e), router.py 모듈
+docstring 참고) idx가 연속인 두 세그먼트가 격자상 이웃이 아니면 RT가 그 커플러를 통째로
+실패 처리한다.
+
+2026-09-20 이전엔 박스를 지그재그(boustrophedon)로 그냥 "훑으며 빈 셀 채우기"였다 — 진행
+방향을 따라 셀을 순서대로 보되, 막힌 셀(own-qubit 몸체/제3 큐빗/다른 커플러 세그먼트)은
+그냥 건너뛰고 다음 빈 셀을 집었다. 이게 "제일 먼저 만나는 k개의 빈 셀"은 보장해도 "그
+k개가 서로 이어져 있다"는 전혀 보장하지 않는다 — 막힌 셀 하나를 건너뛰는 순간 idx가
+연속인 두 세그먼트 사이에 격자상 빈틈이 생긴다. 실측(RT v3 도입 후): 커플러 기준
+22.5~82.8%가 이런 "점프"를 하나 이상 가졌고, RT 라우팅 성공률이 40.0%까지 떨어졌다 —
+GP가 만드는 "체인"이 사실 체인이 아니었다는 뜻이다. 그래서 배치 자체를 "빈 셀 채우기"가
+아니라 "포트에서 포트로 이어지는 경로 탐색"으로 바꿨다 — 막힌 셀은 건너뛰는 게 아니라
+경로가 아예 피해 가야 한다(_find_chain_path 참고).
 
 2단계 구조: FP가 커플러 경계 박스를 "선언"하고(region()이 여기선 더 이상 힌트가 아니라
 GP의 하드 탐색 범위다), GP는 그 박스 밖으로 한 걸음도 안 나간다 — 박스 안에 k개 세그먼트가
@@ -88,6 +101,7 @@ class GlobalPlacement:
         # 막았는지"를 커플러별로 다시 해석할 방법이 없어진다.
         new_couplers: dict[tuple[int, int], Coupler] = {}
         failed = 0
+        short = 0  # 경로는 찾았지만 k개에 못 미친 커플러(요청 2절: 실패 아니라 미달로 다룸)
         for key in order:
             coupler = state.couplers[key]
             segs = _place_chain(coupler, state.qubits, state.port_assignment.get(key),
@@ -97,12 +111,14 @@ class GlobalPlacement:
             if segs is None:
                 failed += 1
                 segs = []
+            elif 0 < len(segs) < coupler.num_segments:
+                short += 1
             new_couplers[key] = replace(coupler, segments=segs)
 
         n_total = len(state.couplers)
         logging.info(
-            "[GP] %s: couplers=%d placed=%d failed=%d segments=%d",
-            state.processor_name, n_total, n_total - failed, failed,
+            "[GP] %s: couplers=%d placed=%d failed=%d 길이미달=%d segments=%d",
+            state.processor_name, n_total, n_total - failed, failed, short,
             sum(len(c.segments) for c in new_couplers.values()),
         )
 
@@ -243,54 +259,143 @@ def _region_index_range(lo: float, hi: float, cell: float, i_max: int) -> tuple[
     return i_lo, i_hi
 
 
-# region 박스 안 셀을 지그재그(boustrophedon)로 훑는 순서를 만든다. 긴 변을 진행축(primary),
-# 짧은 변을 지그재그축(secondary)으로 삼는다 — Coupler.region()의 "미앤더는 포트-포트
-# 방향이 아니라 짧은 변 방향으로 퍼진다"는 근거를 격자 위에서 그대로 따른 것이다. p1과
-# 가까운 모서리에서 시작해 진행축을 따라가며, 한 줄(secondary)을 다 훑을 때마다 방향을
-# 뒤집는다 — 그러면 줄이 바뀌는 지점에서도 이전 셀과 여전히 인접(1칸 차)이 유지된다.
-def _boustrophedon_cells(
-    x0: float, x1: float, y0: float, y1: float, p1: tuple[float, float],
-    cell: float, i_max: int, j_max: int,
-) -> list[tuple[int, int]]:
-    ri = _region_index_range(x0, x1, cell, i_max)
-    rj = _region_index_range(y0, y1, cell, j_max)
-    if ri is None or rj is None:
-        return []
-    i0, i1 = ri
-    j0, j1 = rj
+# 격자 위에서 start(q1 포트 셀)에서 end(q2 포트 셀)까지, 정확히(또는 그보다 짧게) k개의
+# 셀을 지나는 4-인접 단순 경로(같은 셀을 두 번 지나지 않음 — 세그먼트는 물리적 정사각형
+# 이라 겹칠 수 없다)를 찾는다. RT(core/router.py v3)가 Segment.idx 순서를 그대로 이어
+# 꺾은선을 만들므로, 이 함수가 돌려주는 경로의 순서가 곧 idx 순서가 되고, 인접한 두
+# 원소는 항상 격자상 이웃이라는 게 RT가 기대하는 유일한 불변식이다.
+#
+# 왜 DFS+백트래킹인가: "정확히 k개짜리 단순 경로 찾기"는 일반적으로 NP-hard다(해밀턴
+# 경로 문제의 변형 — 그래프에 장애물이 있고 길이가 그래프 크기보다 작아도 마찬가지).
+# 이 저장소 규모(박스당 자유 셀 수십 개, 칩당 커플러 최대 144개)에서 정확 해를 매번
+# 구하는 건 현실적이지 않다. 후보 셋(요청 1절)을 이렇게 평가했다:
+#   - 길이를 상태에 넣은 BFS: "방문한 셀 집합"까지 상태에 넣어야 단순 경로를 보장하는데,
+#     그러면 상태 공간이 사실상 전수 탐색과 같아진다(방문 집합 자체가 지수개) — BFS의
+#     "레벨별로 짧은 것부터"라는 장점이 여기선 안 산다(짧은 경로가 아니라 "정확히 k개"가
+#     필요하므로).
+#   - 탐욕 + 국소 수정: 매 걸음 목표 방향으로만 가면 막다른 길에 몰렸을 때 되돌아갈
+#     방법이 없다 — "국소 수정"이 사실상 백트래킹인데, 그럴 거면 처음부터 백트래킹을
+#     제대로 설계하는 게 낫다.
+#   - DFS+백트래킹(채택): 아래 두 가지치기를 더하면 실전 규모에서 빠르다(실측은
+#     GlobalPlacement._place 호출부의 커밋/보고 메시지 참고). 이 저장소가 이미 비슷한
+#     원칙(예: LG의 "후보 배제, 페널티 아님")을 여러 곳에 쓰고 있어 일관적이기도 하다.
+#
+# 가지치기 둘 다 "참인 해를 걸러내지 않는다"(안전한 필요조건)는 게 핵심이다:
+#   1) 맨해튼 거리 가지치기: 어떤 셀에서 end까지 맨해튼 거리보다 적은 걸음으로는 절대
+#      못 간다 — 장애물은 필요 걸음 수를 늘릴 뿐 줄이지 않으므로 이 하한은 장애물 유무와
+#      무관하게 항상 성립한다.
+#   2) 홀짝 가지치기: 격자는 이분 그래프라 한 걸음마다 맨해튼 거리의 홀짝이 뒤집힌다 —
+#      "남은 예산 - 남은 거리"가 홀수면 그 지점에서 정확히 그 예산 안에 end로 못 들어온다.
+#
+# 여유(slack = 남은 예산 - 맨해튼 거리)가 있으면 end에서 "먼" 이웃부터 시도한다(경로를
+# 길게 뽑아 k에 다가가려는 목적) — 여유가 0이 되는 순간부터는 매 걸음이 거리를 정확히
+# 1씩 줄여야만 하므로(그러지 않으면 예산 초과) end로 "직행"하는 이웃만 시도한다. 이
+# "여유 있을 때 방황, 없으면 직행" 전략은 백트래킹을 여유가 있는 초반 구간에 국한시켜,
+# 박스가 심하게 막혀 있지 않은 한 대부분 빠르게 끝난다.
+#
+# max_expansions로 DFS 노드 확장 수를 제한한다 — 그 예산 안에 정확히 k개를 못 찾으면
+# 그때까지 찾은 "end에 닿은 가장 긴 경로"를 대신 쓴다(요청 2절: k개보다 짧은 경로만
+# 가능하면 그대로 배치하고 미달을 보고한다 — 시간 예산 소진도 같은 원칙으로 다룬다,
+# 억지로 더 찾지 않는다). end에 닿는 경로 자체를 하나도 못 찾으면(장애물에 막혀 연결
+# 자체가 불가능하거나, k가 start-end 최短 거리보다 작아 애초에 도달 불가능하면) None —
+# 이 경우는 "박스 밖으로 나가서라도 k개를 채운다"가 아니라 그대로 실패로 본다(요청 2절:
+# "k개를 넘기려고 박스 밖으로 나가지 마라" — 박스 안에서 아예 길이 없으면 실패다).
+def _find_chain_path(
+    start: tuple[int, int], end: tuple[int, int], is_free, k: int,
+    max_expansions: int = 20000,
+) -> list[tuple[int, int]] | None:
+    if k <= 0:
+        return None
+    if not is_free(start) or not is_free(end):
+        return None
+    if start == end:
+        return [start]
 
-    if (i1 - i0) >= (j1 - j0):
-        p_lo, p_hi, s_lo, s_hi = i0, i1, j0, j1
-        p_near = p1[0] <= (i0 + i1 + 1) * cell / 2.0
-        s_near = p1[1] <= (j0 + j1 + 1) * cell / 2.0
-        make = lambda p, s: (p, s)
-    else:
-        p_lo, p_hi, s_lo, s_hi = j0, j1, i0, i1
-        p_near = p1[1] <= (j0 + j1 + 1) * cell / 2.0
-        s_near = p1[0] <= (i0 + i1 + 1) * cell / 2.0
-        make = lambda p, s: (s, p)
+    def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    primaries = range(p_lo, p_hi + 1) if p_near else range(p_hi, p_lo - 1, -1)
-    cells: list[tuple[int, int]] = []
-    forward = s_near
-    for p in primaries:
-        seconds = range(s_lo, s_hi + 1) if forward else range(s_hi, s_lo - 1, -1)
-        for s in seconds:
-            cells.append(make(p, s))
-        forward = not forward
-    return cells
+    # 격자는 이분 그래프라 start->end 단순 경로의 길이(셀 개수)는 항상 같은 홀짝성만
+    # 가능하다 — 걸음 수(길이-1)가 manhattan(start,end)와 같은 홀짝이어야 하므로(각 걸음이
+    # 거리를 ±1만 바꾸니까), 길이 자체는 항상 manhattan(start,end)+1과 같은 홀짝이다. k가
+    # 그 홀짝과 다르면 "정확히 k개"는 장애물과 무관하게 수학적으로 아예 불가능하다 — 실측
+    # (grid_25 재현: k=10, manhattan=4일 때 9-4=5로 홀수)으로 처음엔 이걸 놓쳐서, 매 반복의
+    # 가지치기가 "고정된 k" 기준으로 계산되는 바람에 틀린 홀짝이 첫 걸음부터 모든 분기를
+    # 막아버려 "더 짧은 경로조차" 못 찾고 완전 실패로 돌아갔다(요청 2절이 원하는 "짧은
+    # 경로라도 배치"를 아예 시도조차 못 함). 고친 방법: 탐색을 시작하기 전에 목표 길이를
+    # k 또는 k-1 중 실제로 가능한 홀짝으로 맞춘다 — k와 k-1은 항상 서로 다른 홀짝이므로
+    # 반드시 둘 중 하나는 맞는다. 이렇게 하면 가지치기 공식이 항상 "달성 가능한 목표"
+    # 기준으로 서기 때문에(아래 dfs 내부의 홀짝 불변식이 시작점부터 성립하고, 한 걸음마다
+    # (remaining - 거리)가 0 또는 -2만큼만 바뀌므로 그 불변식이 끝까지 유지된다), 진짜
+    # 장애물 때문에 막히는 경우와 "애초에 숫자가 안 맞아서" 막히는 경우가 더 이상 섞이지
+    # 않는다.
+    target = k
+    if (target - 1 - manhattan(start, end)) % 2 != 0:
+        target -= 1
+    if target <= 0:
+        return None
+
+    best_path: list[tuple[int, int]] | None = None
+    path = [start]
+    visited = {start}
+    expansions = [0]
+    k = target
+
+    def dfs() -> bool:  # True = 그만 찾아도 됨(정확히 k개 성공 또는 예산 소진)
+        nonlocal best_path
+        expansions[0] += 1
+        if expansions[0] > max_expansions:
+            return True
+
+        cur = path[-1]
+        if cur == end:
+            if best_path is None or len(path) > len(best_path):
+                best_path = list(path)
+            if len(path) == k:
+                return True
+
+        if len(path) >= k:
+            return False
+
+        remaining = k - len(path)
+        candidates = []
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = (cur[0] + dx, cur[1] + dy)
+            if n in visited or not is_free(n):
+                continue
+            d = manhattan(n, end)
+            slack = (remaining - 1) - d
+            if slack < 0 or slack % 2 != 0:
+                continue  # 이 이웃으로 가면 남은 예산 안에 end 도달 불가(안전한 가지치기)
+            candidates.append((n, d))
+
+        cur_slack = remaining - manhattan(cur, end)
+        candidates.sort(key=lambda t: t[1], reverse=(cur_slack > 0))
+
+        for n, _d in candidates:
+            visited.add(n)
+            path.append(n)
+            done = dfs()
+            path.pop()
+            visited.discard(n)
+            if done:
+                return True
+        return False
+
+    dfs()
+    return best_path
 
 
 # 커플러 하나의 세그먼트 체인을 배치한다. 박스(FP가 확정한 coupler_regions[key]) 안에서만
 # 찾는다 — 밖으로 넓히는 재시도는 없다(2단계 구조: 박스를 넓히는 건 FP의 권한이지 GP의
 # 권한이 아니다). 장애물 판정은 _cell_blocked()(자기 큐빗의 배정 포트 근처만 제외, 그
-# 밖의 자기 큐빗 몸체·제3 큐빗·다른 커플러 세그먼트는 전부 포함)로 한다. 성공하면
-# Segment 리스트를 돌려주고 segment_occupied를 그
-# 셀들만큼 갱신한다(호출부가 따로 갱신할 필요 없음 — qubit_owner는 애초에 커플러가 안
-# 바꾸므로 갱신 대상이 아니다). 실패하면 아무것도 건드리지 않고 None을 돌려준다 — 이때
-# "실패"는 이 박스 하나에 국한된 사실이라, 같은 박스를 먼저 차지한 다른 커플러의 세그먼트를
-# 피해 자기 박스의 남은 자리를 쓰는 것까지는 이 함수의 free-cell 필터링만으로 이미 된다 —
-# 백트래킹/재배치는 하지 않는다(순차 배치 원칙).
+# 밖의 자기 큐빗 몸체·제3 큐빗·다른 커플러 세그먼트는 전부 포함)로 한다 — _find_chain_path
+# 가 그 판정 하나로 "지나갈 수 있는 셀"을 정의하므로, GP가 "놓을 수 있다"고 본 경로는
+# 정의상 장애물을 피해 간다. 성공(부분 성공 포함)하면 Segment 리스트를 돌려주고
+# segment_occupied를 그 셀들만큼 갱신한다. start/end(포트 셀) 자체가 막혀 있거나 둘이
+# 아예 연결돼 있지 않으면 None — 이때 "실패"는 이 박스 하나에 국한된 사실이라, 같은
+# 박스를 먼저 차지한 다른 커플러의 세그먼트를 피해 자기 박스의 남은 자리를 쓰는 것까지는
+# 이 함수의 free-cell 판정만으로 이미 된다 — 백트래킹은 경로 탐색 내부에서만 하고,
+# 커플러 사이의 재배치는 하지 않는다(순차 배치 원칙 그대로 유지).
 def _place_chain(
     coupler: Coupler, qubits: dict[int, Qubit], assignment: tuple[str, str] | None,
     box: tuple[float, float, float, float] | None,
@@ -303,20 +408,38 @@ def _place_chain(
     if assignment is None or box is None:
         return None  # FP가 포트/박스를 못 정한 커플러 — 이론상 skipped 칩에서만 나오므로 여기 안 옴
 
-    q1 = qubits[coupler.q1]
-    p1_name, _p2_name = assignment
-    p1 = q1.ports[p1_name]
+    q1, q2 = qubits[coupler.q1], qubits[coupler.q2]
+    p1_name, p2_name = assignment
+    p1, p2 = q1.ports[p1_name], q2.ports[p2_name]
 
     x0, x1, y0, y1 = box
     i_max = _die_max_index(chip_w, cell)
     j_max = _die_max_index(chip_h, cell)
+    ri = _region_index_range(x0, x1, cell, i_max)
+    rj = _region_index_range(y0, y1, cell, j_max)
+    if ri is None or rj is None:
+        return None
+    i_lo, i_hi = ri
+    j_lo, j_hi = rj
 
-    cells = _boustrophedon_cells(x0, x1, y0, y1, p1, cell, i_max, j_max)
-    free = [c for c in cells if not _cell_blocked(coupler, c, cell, qubits, assignment, qubit_owner, segment_occupied)]
-    if len(free) < k:
+    # 포트가 실제로 속한 격자 셀 — region()이 두 포트를 반드시 덮도록 박스를 잡으므로
+    # (Coupler.region() 1)단계) 이 셀은 박스 안에 있는 게 정상이다.
+    start = (int(math.floor(p1[0] / cell)), int(math.floor(p1[1] / cell)))
+    end = (int(math.floor(p2[0] / cell)), int(math.floor(p2[1] / cell)))
+
+    def in_box(c: tuple[int, int]) -> bool:
+        return i_lo <= c[0] <= i_hi and j_lo <= c[1] <= j_hi
+
+    if not in_box(start) or not in_box(end):
         return None
 
-    chosen = free[:k]
-    segment_occupied.update(chosen)
+    def is_free(c: tuple[int, int]) -> bool:
+        return in_box(c) and not _cell_blocked(coupler, c, cell, qubits, assignment, qubit_owner, segment_occupied)
+
+    path = _find_chain_path(start, end, is_free, k)
+    if path is None:
+        return None
+
+    segment_occupied.update(path)
     return [Segment(idx=idx, x=(i + 0.5) * cell, y=(j + 0.5) * cell)
-            for idx, (i, j) in enumerate(chosen)]
+            for idx, (i, j) in enumerate(path)]
