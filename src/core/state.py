@@ -39,6 +39,70 @@ def _rect_intersect(
     return (x0, x1, y0, y1)
 
 
+# Coupler.region()의 축별 "핀"(pin) 헬퍼 — 2026-09-21 포트를 이웃 방향 기반
+# (qubit_port_toward)으로 바꾸기 전엔 포트가 항상 큐빗의 좌/우 변(x축)에 있어서 이
+# 로직이 x축 전용이었다. 이제 포트가 상/하 변(y축)에도 있을 수 있으므로, 두 축 어느
+# 쪽이든 같은 함수로 다룬다(호출부가 x/y 각각 한 번씩 호출).
+def _pin_snap_axis(
+    lo: float, hi: float, cell: float, pin_lo: bool, pin_hi: bool,
+) -> tuple[float, float, bool, bool]:
+    # 핀이 걸린 쪽(자기 큐빗 몸체 방향)은 안쪽으로(ceil for lo, floor for hi) 스냅해
+    # 그 큐빗의 경계 안 셀을 박스에서 뺀다 — 핀이 없으면 예전처럼 바깥으로(floor/ceil).
+    raw_lo, raw_hi = lo, hi
+    new_lo = (math.ceil(lo / cell) if pin_lo else math.floor(lo / cell)) * cell
+    new_hi = (math.floor(hi / cell) if pin_hi else math.ceil(hi / cell)) * cell
+
+    if new_hi <= new_lo and pin_lo and pin_hi:
+        # 두 핀이 서로 충돌(두 큐빗 사이 간격이 흔히 1~2칸 사이라 드물지 않다) — 둘 다
+        # 포기하지 않고, 단독 적용 시 더 넓게 남는 쪽 하나만 살린다.
+        hi_only_lo = math.ceil(raw_hi / cell) * cell
+        lo_only_hi = math.floor(raw_lo / cell) * cell
+        width_only_lo = hi_only_lo - new_lo
+        width_only_hi = new_hi - lo_only_hi
+        if width_only_lo <= 0 and width_only_hi <= 0:
+            new_lo, new_hi = math.floor(raw_lo / cell) * cell, math.ceil(raw_hi / cell) * cell
+            pin_lo = pin_hi = False
+        elif width_only_lo >= width_only_hi:
+            new_hi, pin_hi = hi_only_lo, False
+        else:
+            new_lo, pin_lo = lo_only_hi, False
+
+    if new_hi <= new_lo:
+        # 핀 하나만 걸렸는데도 반대쪽 원래 경계와 충돌(두 포트가 1칸보다 가까움) —
+        # 안전망으로 완전히 되돌린다.
+        new_lo, new_hi = math.floor(raw_lo / cell) * cell, math.ceil(raw_hi / cell) * cell
+        pin_lo = pin_hi = False
+
+    return new_lo, new_hi, pin_lo, pin_hi
+
+
+# region() 2)단계(최소 변 길이 cell 확보)의 핀 인식 버전 — 핀이 걸린 변은 밀 수 없으므로
+# 남은 쪽만 넓힌다. 양쪽 다 핀이면(둘 다 못 밈) 핀을 포기하고 반씩 넓힌다.
+def _pin_pad_axis(
+    lo: float, hi: float, cell: float, pin_lo: bool, pin_hi: bool,
+) -> tuple[float, float, bool, bool]:
+    if hi - lo < cell:
+        pad = cell - (hi - lo)
+        if pin_lo and not pin_hi:
+            hi += pad
+        elif pin_hi and not pin_lo:
+            lo -= pad
+        else:
+            lo, hi = lo - pad / 2.0, hi + pad / 2.0
+            pin_lo = pin_hi = False
+    return lo, hi, pin_lo, pin_hi
+
+
+# 포트 p가 큐빗 q의 어느 축 경계에 정확히 닿아 있는지(법선 축)와, 그 축에서 q의 몸체가
+# p 기준 어느 부호 방향에 있는지. qubit_port_toward()가 만드는 포트는 항상 두 축 중
+# 하나만 ±(w/2 또는 h/2) 그대로이므로(그게 법선), 여기서 그 축을 되짚는다. 포트가
+# 좌/우(x축) 또는 상/하(y축) 어느 변에도 있을 수 있으므로 둘 다 판별한다 — qubit_port_toward
+# 가 이웃 방향에 따라 어느 변이든 고를 수 있게 만든 것과 짝을 이룬다.
+def _port_edge_axis(p: tuple[float, float], q: "Qubit") -> tuple[str, float]:
+    if abs(abs(p[0] - q.x) - q.w / 2.0) < 1e-6:
+        return "x", (1.0 if p[0] < q.x else -1.0)
+    return "y", (1.0 if p[1] < q.y else -1.0)
+
 # cell_aabb(격자 셀 하나)가 큐빗 때문에 막혔는지 — core/globalplacement.py의
 # _cell_blocked와 같은 판정(자기 큐빗은 coupler_own_port_cell로 배정 포트가 있는 셀만
 # 예외, 제3자는 전부 막힘)을 GP의 segment_occupied 없이(아직 다른 커플러가 뭘 놨는지
@@ -48,13 +112,14 @@ def _rect_intersect(
 # 넓이"를 면적으로 흉내), 이제는 격자를 직접 알므로 근사가 필요 없다.
 def _cell_blocked_by_qubits(
     coupler: "Coupler", qubits: dict[int, "Qubit"],
-    assignment: tuple[str, str] | None, cell_aabb: tuple[float, float, float, float],
+    ports: tuple[tuple[float, float], tuple[float, float]] | None,
+    cell_aabb: tuple[float, float, float, float],
 ) -> bool:
     for qid, q in qubits.items():
         q_aabb = (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
         if _rect_intersect(cell_aabb, q_aabb) is None:
             continue
-        if coupler_own_port_cell(coupler, qid, q, assignment, cell_aabb):
+        if coupler_own_port_cell(coupler, qid, ports, cell_aabb):
             continue
         return True
     return False
@@ -87,7 +152,8 @@ def _cell_index_range(lo: float, hi: float, cell: float) -> tuple[int, int] | No
 # (다시 스냅할 필요가 없다 — 이미 셀 경계 그 자체다).
 def _count_free_cells_in_box(
     coupler: "Coupler", box: tuple[float, float, float, float],
-    qubits: dict[int, "Qubit"], assignment: tuple[str, str] | None, cell: float,
+    qubits: dict[int, "Qubit"],
+    ports: tuple[tuple[float, float], tuple[float, float]] | None, cell: float,
 ) -> tuple[int, tuple[int, int] | None, tuple[int, int] | None]:
     x0, x1, y0, y1 = box
     x_range = _cell_index_range(x0, x1, cell)
@@ -100,7 +166,7 @@ def _count_free_cells_in_box(
     for i in range(i0, i1 + 1):
         for j in range(j0, j1 + 1):
             cell_aabb = (i * cell, (i + 1) * cell, j * cell, (j + 1) * cell)
-            if not _cell_blocked_by_qubits(coupler, qubits, assignment, cell_aabb):
+            if not _cell_blocked_by_qubits(coupler, qubits, ports, cell_aabb):
                 free += 1
     return free, x_range, y_range
 
@@ -111,26 +177,65 @@ class Qubit:
     w:  float            # width
     h:  float            # height
     f:  float            # frequency ghz
-    pad_inset_um: float   # 포켓 경계(±h/2)에서 포트까지의 안쪽 여백 (um) — params.qubit_pad_inset_um
+    pad_inset_um: float   # 포트가 실제 닿는 변을 따라(접선 방향) 모서리에서 안쪽으로 들이는 여백 (um)
+                          # — params.qubit_pad_inset_um. 2026-09-21 이전엔 "y-경계에서" 고정
+                          # 값이었다(포트가 항상 좌/우 변에 있었으므로) — 아래 qubit_port_toward()
+                          # docstring 참고.
     x:  float = 0.0       # x-coordinate(center)
     y:  float = 0.0       # y-coordinate(center)
 
-    @property
-    def ports(self):
-        # qiskit-metal TransmonPocket의 connection_pads 키(p_top_left 등)와 이름을 맞춘다
-        # (/home/LabMember/ngchoi/research/qiskit_metal/transmon_draw2.py:102-105, 209-212).
-        off_x = self.w / 2.0
-        off_y = self.h / 2.0 - self.pad_inset_um
-        return {
-            "p_top_left":     (self.x - off_x, self.y + off_y),
-            "p_top_right":    (self.x + off_x, self.y + off_y),
-            "p_bottom_left":  (self.x - off_x, self.y - off_y),
-            "p_bottom_right": (self.x + off_x, self.y - off_y),
-        }
+    # ports 프로퍼티는 2026-09-21 제거했다 — 포트가 이제 "이 큐빗이 어느 이웃을 향하는가"에
+    # 의존해(qubit_port_toward 참고) 큐빗 하나만으로는 계산할 수 없다(이웃 좌표가 필요).
+    # 좌표는 core/floorplan.py의 build_ports(state 전체를 봄)가 FP 이후 한 번에 계산해
+    # ChipState.ports에 담는다 — Qubit 자체는 순수하게 자기 자신의 물리 속성(w/h/f/위치)만
+    # 갖는 얇은 데이터로 되돌아간다.
 
     def __str__(self):
         return (f"id={self.id:>3d} w={self.w:>6.2f} h={self.h:>6.2f} "
                 f"f={self.f:>5.2f}GHz x={self.x:>8.2f} y={self.y:>8.2f}")
+
+
+# 큐빗 중심에서 이웃 쪽으로 쏜 레이가 큐빗 사각형(w x h)과 만나는 경계점 — 01_mainref의
+# utils/crosstalk.py::_pad_boundary_point를 이식했다(실측: 이 방식으로 포트를 두면
+# 박스-자기큐빗 겹침이 819(202609-21 핀 적용 후 364)에서 0으로, "케이스 A"(포트가 실제
+# 이웃 방향과 어긋나는 경우) 185건이 0건으로 사라진다 — 세션 보고서 참고). 고정 4슬롯
+# (p_top_left 등, 항상 좌/우 변)과 달리 이 포트는 항상 "그 특정 이웃을 향한" 변 위에
+# 있으므로, 박스가 그 방향으로 뻗어나가는 것 자체가 자기 큐빗 몸체에서 멀어지는 방향과
+# 항상 일치한다 — case A가 구조적으로 불가능해지는 이유.
+#
+# pad_inset_um 반영: 고정 4슬롯 시절엔 포트가 항상 좌/우 변(off_x=w/2 정확히)에 있고
+# pad_inset은 그 변을 "따라"(접선 방향, y축) 모서리에서 안쪽으로 들이는 용도였다(off_y =
+# h/2 - inset) — 실제 qiskit-metal 커넥터 패드가 코너 정확히가 아니라 그 근처에 달리는
+# 것을 반영). 레이-교점 방식은 어느 변에 닿을지 미리 알 수 없으므로, "닿은 변에 수직인
+# 축(법선, 경계에 정확히 고정)"과 "그 변을 따르는 축(접선, 안쪽으로 inset)"을 매번
+# 새로 판별해 같은 의미를 일반화한다: 법선 좌표는 항상 ±(w/2 또는 h/2) 그대로 두고,
+# 접선 좌표만 중심 쪽으로 inset만큼 당긴다(코너를 완전히 넘어가지 않도록 접선 raw값의
+# 절대값으로 클램프).
+def qubit_port_toward(qubit: "Qubit", neighbor_x: float, neighbor_y: float) -> tuple[float, float]:
+    dx, dy = neighbor_x - qubit.x, neighbor_y - qubit.y
+    dist = math.hypot(dx, dy)
+    if dist < 1e-9:
+        # 이웃과 완전히 같은 좌표(퇴화) — Coupler.region()이 이 경우 자체를 ValueError로
+        # 막으므로 여기까지 오면 안 되지만, 방어적으로 임의의 고정 방향(+x)을 쓴다.
+        dx, dy, dist = 1.0, 0.0, 1.0
+    dx_n, dy_n = dx / dist, dy / dist
+    hw, hh = qubit.w / 2.0, qubit.h / 2.0
+    t_x = hw / abs(dx_n) if abs(dx_n) > 1e-9 else math.inf
+    t_y = hh / abs(dy_n) if abs(dy_n) > 1e-9 else math.inf
+    inset = qubit.pad_inset_um
+    if t_x <= t_y:
+        # 좌/우 변에서 만남 — x가 법선(±hw 그대로), y가 접선(inset).
+        rel_x = math.copysign(hw, dx_n)
+        rel_y_raw = dy_n * t_x
+        shrink = min(inset, abs(rel_y_raw))
+        rel_y = rel_y_raw - math.copysign(shrink, rel_y_raw)
+    else:
+        # 상/하 변에서 만남 — y가 법선(±hh 그대로), x가 접선(inset).
+        rel_y = math.copysign(hh, dy_n)
+        rel_x_raw = dx_n * t_y
+        shrink = min(inset, abs(rel_x_raw))
+        rel_x = rel_x_raw - math.copysign(shrink, rel_x_raw)
+    return (qubit.x + rel_x, qubit.y + rel_y)
 
 @dataclass
 class Segment:
@@ -245,12 +350,19 @@ class Coupler:
     # 개념이라 region()/bbox()로 분리한다.
 
     def region(
-        self, q1: Qubit, q2: Qubit, port1: str | None, port2: str | None,
+        self, q1: Qubit, q2: Qubit,
+        p1: tuple[float, float] | None, p2: tuple[float, float] | None,
         qubits: dict[int, Qubit], chip_width: float, chip_height: float,
     ) -> tuple[float, float, float, float] | None:
         # 배치 전 제약: GP가 이 커플러의 segments를 채울 때, 그 안에서만 배치하도록 쓸
         # 후보 영역이다. DRC는 bbox()(AABB)를 쓰므로 여기서도 AABB로 유지한다 — 회전
         # 사각형은 겹침 판정이 복잡해져 지금 단계에서 도입하지 않는다.
+        #
+        # p1/p2는 2026-09-21부터 포트 "이름"이 아니라 좌표를 직접 받는다(core/floorplan.py의
+        # build_ports가 qubit_port_toward로 미리 계산해 둔 것) — 포트가 이제 "이 큐빗이
+        # 어느 이웃을 향하는가"에 의존해 이름-슬롯 하나로 고정할 수 없어졌기 때문이다.
+        # None이면(호출부가 아직 포트를 못 정한 경우) 큐빗 중심으로 대신한다 — 이 경우
+        # 반환된 영역이 실제 포트를 덮는다는 보장이 없다.
         #
         # qubits(칩 전체 큐빗)/chip_width/chip_height는 2026-09-20 own-qubit 예외를
         # "포트 셀만"으로 좁힌 뒤 추가됐다 — 아래 3) 참고. None을 반환할 수 있게 된 것도
@@ -260,11 +372,11 @@ class Coupler:
         # coupler_regions[key]=None으로 남기면, GP의 기존 "박스 없음" 실패 경로
         # (core/globalplacement.py의 _place_chain, `box is None: return None`)를 그대로
         # 타서 이 커플러 하나만 실패로 세고 칩 전체는 계속 진행한다.
-        p1 = q1.ports[port1] if port1 is not None else (q1.x, q1.y)
-        p2 = q2.ports[port2] if port2 is not None else (q2.x, q2.y)
-        # port1/port2가 아직 배정 안 됐으면(ChipState.port_assignment가 이 커플러 키를 안 가지고
-        # 있으면) 호출부는 None을 넘기고 여기선 큐빗 중심으로 대신한다 — 포트는 중심에서
-        # offset만큼 떨어져 있으므로, 이 경우 반환된 영역이 실제 포트를 덮는다는 보장이 없다.
+        has_p1, has_p2 = p1 is not None, p2 is not None
+        if p1 is None:
+            p1 = (q1.x, q1.y)
+        if p2 is None:
+            p2 = (q2.x, q2.y)
 
         # 정확한 float 등가(p1 == p2) 대신 거리 임계값을 쓴다 — FP가 내놓는 좌표는 반복
         # 최적화 결과라 "같은 점"이어도 부동소수 잔차(예: 0.001um)가 남을 수 있고, 그 정도
@@ -282,92 +394,102 @@ class Coupler:
         # 1) 두 포트를 반드시 덮는 최소 AABB (대각선이어도 x/y 각 축을 직접 min/max로 잡으므로
         #    항상 두 점을 포함한다 — 이전 버전은 abs(dy) > abs(dx)로 축 하나만 골라 나머지
         #    축에서 포트를 놓치는 버그가 있었다).
-        #
-        #    격자 배수로 바깥쪽 스냅한다(포트당 최대 반 칸). 2026-09-20(연속 면적 대신
-        #    격자 셀 개수를 직접 세도록 바꾼 버전) 이후로 3)단계가 "완전히 포함된 셀만"
-        #    센다(_count_free_cells_in_box, _cell_index_range) — 이 스냅이 없으면 포트
-        #    좌표 자체가 박스의 원 경계(x0 또는 x1)가 되어, 그 포트가 속한 셀이 "완전히
-        #    포함"되지 못하고 박스에서 통째로 잘려나갈 수 있다. 실측(grid_25 커플러
-        #    (16,17)): 포트가 (3582.5, 6882.5)인데 박스가 x0=3600부터 시작해(포트
-        #    좌표보다 안쪽) 그 포트의 셀이 박스의 유효 셀 범위 밖으로 밀려났고, GP의
-        #    경로 탐색(_place_chain)이 "포트 셀이 박스 밖"으로 보고 첫 걸음부터 실패했다
-        #    — grid_25 40개 중 21개가 이 버그 하나로 실패했다. 이 스냅은 여유를 더
-        #    주려는 게 아니라 "포트가 속한 셀은 반드시 박스 안에 있어야 한다"는 최소
-        #    요구를 맞추는 보정이다 — 축당 최대 반 칸(segment_size_um/2)만 넓어지므로,
-        #    이전 라운드에서 없앤 "성장 후 박스 전체를 네 변 다 바깥으로 스냅"(반복마다
-        #    누적돼 최종 1.82배까지 불어났던 것)과는 규모가 다르다.
         x0, x1 = min(p1[0], p2[0]), max(p1[0], p2[0])
         y0, y1 = min(p1[1], p2[1]), max(p1[1], p2[1])
-        x0 = math.floor(x0 / self.segment_size_um) * self.segment_size_um
-        x1 = math.ceil(x1 / self.segment_size_um) * self.segment_size_um
-        y0 = math.floor(y0 / self.segment_size_um) * self.segment_size_um
-        y1 = math.ceil(y1 / self.segment_size_um) * self.segment_size_um
+        cell = self.segment_size_um
 
-        # 2) 각 변 하한: segment_size_um — 그보다 좁으면 세그먼트(정사각형)가 물리적으로 안 들어간다.
-        if x1 - x0 < self.segment_size_um:
-            pad = (self.segment_size_um - (x1 - x0)) / 2.0
-            x0, x1 = x0 - pad, x1 + pad
-        if y1 - y0 < self.segment_size_um:
-            pad = (self.segment_size_um - (y1 - y0)) / 2.0
-            y0, y1 = y0 - pad, y1 + pad
+        # 핀(pin): 포트가 자기 큐빗의 경계(qubit_port_toward가 만드는 "법선" 축)에
+        # 있으므로, 그 포트가 세우는 축의 경계값을 바깥으로(floor/ceil) 넓히면 자기
+        # 큐빗 몸체로 들어갈 수도, 안 들어갈 수도 있다 — 두 경우가 갈린다:
+        #   케이스 B(핀 적용): 큐빗 몸체가 포트에서 "박스가 뻗어가는 반대 방향"에 있으면
+        #   원래 박스 구간은 큐빗을 안 건드린다 — floor/ceil 격자 스냅만이 최대 1칸(cell)
+        #   침범을 만든다. 스냅 방향을 뒤집어(바깥 대신 안쪽으로) 완전히 막는다 — 그
+        #   대가로 포트가 걸친 셀 자체는 박스에서 빠진다(GP가 _resolve_endpoint로 한 칸
+        #   바깥의 빈 셀에서 시작해 lead로 포트에 잇는다).
+        #   케이스 A(핀 안 함): 큐빗 몸체가 포트에서 "박스가 뻗어가는 같은 방향"에 있으면,
+        #   박스는 스냅 여부와 무관하게 이미 큐빗의 그 축 전체 폭을 포함한다 — floor/ceil
+        #   방향을 바꿔도 해결되지 않는다. 이 함수의 책임 범위 밖으로 남긴다.
+        #
+        # 2026-09-21에 이웃 방향 포트(qubit_port_toward)로 바꾸면서 이 핀이 어느 축(x
+        # 또는 y)에 걸리는지도 포트마다 다시 판별해야 하게 됐다 — 고정 4슬롯 시절엔 포트가
+        # 항상 좌/우 변(x축)에 있어 케이스 A가 819개 중 185개(x축 전용)였는데, 이웃 방향
+        # 포트는 그 자체로 케이스 A가 구조적으로 거의 발생하지 않는다(포트가 항상 실제
+        # 이웃을 향한 변에 있으므로 "박스가 뻗는 방향 = 큐빗 몸체에서 멀어지는 방향"이
+        # 자동으로 일치) — 실측(세션 보고서): 케이스 A 185→0. 그래도 안전망으로 판별
+        # 로직 자체는 그대로 둔다(포트가 예외적으로 안 맞는 경우를 대비).
+        pin_x0 = pin_x1 = pin_y0 = pin_y1 = False
+        for p_own, q_own, p_other, has_port in (
+            (p1, q1, p2, has_p1), (p2, q2, p1, has_p2),
+        ):
+            if not has_port:
+                continue
+            axis, qubit_dir = _port_edge_axis(p_own, q_own)
+            if axis == "x":
+                sets_lo = p_own[0] <= p_other[0]
+            else:
+                sets_lo = p_own[1] <= p_other[1]
+            box_dir = 1.0 if sets_lo else -1.0
+            if qubit_dir == box_dir:
+                continue  # 케이스 A -- 핀으로 못 막음, 그대로 둠
+            if axis == "x":
+                pin_x0, pin_x1 = pin_x0 or sets_lo, pin_x1 or not sets_lo
+            else:
+                pin_y0, pin_y1 = pin_y0 or sets_lo, pin_y1 or not sets_lo
+
+        # 1b) 격자 스냅 — 축마다 같은 핀 인식 로직(_pin_snap_axis)을 쓴다. 2026-09-20
+        # (연속 면적 대신 격자 셀 개수를 직접 세도록 바꾼 버전) 이후로 3)단계가 "완전히
+        # 포함된 셀만" 센다(_count_free_cells_in_box, _cell_index_range) — 안 핀된 축은
+        # 예전처럼 바깥으로 최대 반 칸 넓혀 포트가 속한 셀이 박스에서 안 잘려나가게 한다
+        # (실측(grid_25 커플러(16,17)): 이 스냅이 없으면 포트 좌표가 박스의 원 경계가 돼
+        # 그 포트의 셀이 박스 밖으로 밀려났고, 40개 중 21개가 이 버그로 실패했었다).
+        x0, x1, pin_x0, pin_x1 = _pin_snap_axis(x0, x1, cell, pin_x0, pin_x1)
+        y0, y1, pin_y0, pin_y1 = _pin_snap_axis(y0, y1, cell, pin_y0, pin_y1)
+
+        # 2) 각 변 하한: segment_size_um — 그보다 좁으면 세그먼트(정사각형)가 물리적으로
+        #    안 들어간다. 핀이 걸린 변은 밀 수 없으므로 남은 쪽만 넓힌다.
+        x0, x1, pin_x0, pin_x1 = _pin_pad_axis(x0, x1, cell, pin_x0, pin_x1)
+        y0, y1, pin_y0, pin_y1 = _pin_pad_axis(y0, y1, cell, pin_y0, pin_y1)
 
         # 3) 셀 하한: GP가 실제로 놓아야 할 세그먼트 개수(self.num_segments) 이상의 '가용
-        #    격자 셀'이 되도록 반복 확장한다. 세 버전째다 — (i) 2026-09-20 최초판은 박스
-        #    전체 연속 면적(w*h)만 required_wire_area(=l*meander_spacing_um)와 비교했다.
-        #    (ii) own-qubit 예외를 포트 셀로 좁힌 뒤 큐빗 몸체가 차지한 면적을 빼고
-        #    반복 확장하도록 고쳤다(그 버전의 실측: 박스당 평균 8.4~27.8%가 죽은 면적).
-        #    그런데 (i)/(ii) 둘 다 호출부가 최종 박스를 격자에 "바깥쪽으로" 스냅했다
-        #    (_snap_box_to_grid) — 연속 면적 기준으로는 빠듯하게 맞춘 박스를 "격자에
-        #    맞다"는 이유만으로 사방으로 최대 반 칸씩 또 부풀린 것이다. 실측(2026-09-20
-        #    재조사): 최종 박스가 01_mainref 공식(sqrt(l*40)) 대비 평균 2.02배였는데,
-        #    그중 1.82배가 순수 이 바깥쪽 스냅 몫이고 (ii)의 차단면적 보정 자체는 평균
-        #    1.04배(중앙값 1.00배)로 거의 기여하지 않았다.
-        #
-        #    이번(iii) 버전은 바깥쪽 스냅을 아예 없앤다. 매 반복 지금 박스([x0,x1]×
-        #    [y0,y1], 격자에 안 맞아도 됨) 안에 "완전히 포함되는" 셀만 세고
-        #    (_count_free_cells_in_box, core/globalplacement.py의 _region_index_range와
-        #    같은 공식 — 격자에 안 맞는 가장자리는 버려진다, 안 부풀린다), 그 개수가
-        #    충분하면 딱 그 셀들의 경계를 박스로 반환한다 — 더 못 준다("포함 판정을
-        #    정확히 하면 스냅이 필요 없을 수 있다"는 제안을 그대로 구현). 모자라면(대부분
-        #    2026-09-17 falcon 사례처럼 정렬 손실 때문 — 전수 조사 결과 407개 커플러 중
-        #    396개가 스냅 없이는 부족했다) 단변을 cell 한 칸만큼만 넓혀 다시 센다 —
-        #    "얼마나 부족한지"를 셀 단위로 직접 재므로, 필요한 만큼만 넓어지고 미리
-        #    여유를 얹어두지 않는다.
-        #
-        #    "단변만 넓힌다"는 원래 근거(장변까지 늘리면 포트 바깥으로 삐져나감)는 그대로
-        #    유지한다. 셀 개수는 정수라 부동소수 허용치가 필요 없다(이전 _REGION_AREA_EPS_UM2
-        #    는 연속 면적 비교의 반올림 잡음을 흡수하기 위한 것이었다 — 정수 비교로 바뀌며
-        #    그 잡음 자체가 사라졌다).
+        #    격자 셀'이 되도록 반복 확장한다. 매 반복 지금 박스([x0,x1]×[y0,y1], 격자에
+        #    안 맞아도 됨) 안에 "완전히 포함되는" 셀만 세고(_count_free_cells_in_box,
+        #    core/globalplacement.py의 _region_index_range와 같은 공식 — 격자에 안 맞는
+        #    가장자리는 버려진다, 안 부풀린다), 그 개수가 충분하면 딱 그 셀들의 경계를
+        #    박스로 반환한다. 모자라면 단변을 cell 한 칸만큼만 넓혀 다시 센다 — "얼마나
+        #    부족한지"를 셀 단위로 직접 재므로, 필요한 만큼만 넓어지고 미리 여유를
+        #    얹어두지 않는다(장변까지 늘리면 포트 바깥으로 삐져나가므로 단변만).
         #
         #    목표 셀 수는 self.num_segments가 아니라 그 위에 box_slack_ratio만큼 얹은
-        #    값이다(2026-09-20, 세 번째 재조사). 위 (iii)판을 처음 넣었을 때 own-qubit
-        #    차단 대비 "순수 용량부족" 실패는 13건→0건으로 완전히 없앴지만, 격자 스냅이
-        #    우연히 얹어주던 평균 1.82배 여유가 사라지며 다른 커플러와의 "경합" 실패가
-        #    23건→71건으로 뛰었다 — 그 여유가 부산물이 아니라 실제로 경합을 흡수하는
-        #    버퍼 역할을 겸하고 있었다는 뜻이다. params.box_slack_ratio(6칩 스윕 근거는
-        #    그 파라미터의 description 참고)로 그 버퍼를 명시적으로 되돌린다.
+        #    값이다(params.box_slack_ratio의 description에 스윕 근거).
         #    required_segments가 0이면(짧은 커플러) 1+ratio를 곱해도 ceil(0)=0이라
-        #    영향이 없다 — 애초에 세그먼트가 필요 없는 커플러에 여유를 줄 이유가 없으므로
-        #    이 자연스러운 동작을 그대로 둔다.
+        #    영향이 없다.
         required_segments = math.ceil(self.num_segments * (1.0 + self.box_slack_ratio))
-        assignment = (port1, port2) if port1 is not None and port2 is not None else None
-        cell = self.segment_size_um
+        ports = (p1, p2)
         for _ in range(_REGION_GROW_MAX_ITERS):
             n_free, x_range, y_range = _count_free_cells_in_box(
-                self, (x0, x1, y0, y1), qubits, assignment, cell,
+                self, (x0, x1, y0, y1), qubits, ports, cell,
             )
             if n_free >= required_segments and x_range is not None and y_range is not None:
                 i0, i1 = x_range
                 j0, j1 = y_range
                 return (i0 * cell, (i1 + 1) * cell, j0 * cell, (j1 + 1) * cell)
             w, h = x1 - x0, y1 - y0
-            if w >= h:
-                new_y0, new_y1 = y0 - cell / 2.0, y1 + cell / 2.0
+            # 짧은 변이어도 양쪽 다 핀이면(자기 큐빗 몸체 앞에서 더 못 밈) 그 축은 못
+            # 키우고 다른 축을 키운다 -- 핀은 위 1)/2)에서 이미 자기 큐빗 겹침을 막았으므로,
+            # 성장이 그 핀을 다시 깨서(=큐빗 몸체로 도로 들어가서) 되돌리면 안 된다.
+            x_growable = not (pin_x0 and pin_x1)
+            y_growable = not (pin_y0 and pin_y1)
+            if not x_growable and not y_growable:
+                return None  # 두 축 다 못 키움(극히 좁은 경우) -- 판단 못 하면 안전하게 실패.
+            if (w >= h and y_growable) or not x_growable:
+                new_y0 = y0 if pin_y0 else y0 - cell / 2.0
+                new_y1 = y1 if pin_y1 else y1 + cell / 2.0
                 if new_y0 < 0.0 or new_y1 > chip_height:
                     return None
                 y0, y1 = new_y0, new_y1
             else:
-                new_x0, new_x1 = x0 - cell / 2.0, x1 + cell / 2.0
+                new_x0 = x0 if pin_x0 else x0 - cell / 2.0
+                new_x1 = x1 if pin_x1 else x1 + cell / 2.0
                 if new_x0 < 0.0 or new_x1 > chip_width:
                     return None
                 x0, x1 = new_x0, new_x1
@@ -423,7 +545,7 @@ class Coupler:
 # DRC가 "위반"으로 다시 잡아내는(또는 그 반대) 모순이 생긴다(같은 부류의 실수를
 # core/legalization.py 모듈 docstring이 AABB_EPS_UM에 대해 이미 경고한 바 있다).
 #
-# assignment가 None이면(이론상 GP/LG 호출부에서 세그먼트가 있는 커플러는 항상 배정도
+# ports가 None이면(이론상 GP/LG 호출부에서 세그먼트가 있는 커플러는 항상 배정도
 # 있으므로 도달 불가능, 방어적 분기) 포트를 알 수 없으니 항상 장애물로 취급한다 — "판단
 # 못 하면 안전하게 막는다"는 이 저장소의 일관된 원칙(예: Coupler.region()의 방어적
 # ValueError)과 같다.
@@ -432,16 +554,21 @@ class Coupler:
 # 격자 셀을 같은 방식(floor 기반, 오른쪽/위쪽 경계 미포함)으로 다루는 것과 규칙을
 # 맞춘 것이다. 포트 좌표가 부동소수 최적화 결과라 셀 경계선에 정확히 걸칠 확률은
 # 사실상 0이므로 이 선택이 실측 결과에 영향을 주지는 않는다.
+#
+# 2026-09-21: ports 매개변수가 "포트 이름"(assignment) 대신 좌표 쌍(p1,p2) 자체를 받는다
+# — 포트가 이제 이웃 방향으로 계산되고 이름이 없어졌으므로(qubit_port_toward,
+# core/floorplan.py의 build_ports) 이름으로 Qubit.ports를 조회할 이유도 없어졌다.
+# qubit 매개변수 자체가 필요 없어져 시그니처에서 뺐다.
 def coupler_own_port_cell(
-    coupler: "Coupler", qubit_id: int, qubit: "Qubit",
-    assignment: tuple[str, str] | None, aabb: tuple[float, float, float, float],
+    coupler: "Coupler", qubit_id: int,
+    ports: tuple[tuple[float, float], tuple[float, float]] | None,
+    aabb: tuple[float, float, float, float],
 ) -> bool:
     if not coupler.is_own_qubit(qubit_id):
         return False
-    if assignment is None:
+    if ports is None:
         return False
-    port_name = assignment[0] if qubit_id == coupler.q1 else assignment[1]
-    px, py = qubit.ports[port_name]
+    px, py = ports[0] if qubit_id == coupler.q1 else ports[1]
     ax0, ax1, ay0, ay1 = aabb
     return ax0 <= px < ax1 and ay0 <= py < ay1
 
@@ -457,11 +584,14 @@ class ChipState:
     qubits: dict[int, Qubit] = field(default_factory=dict)
     couplers: dict[tuple[int, int], Coupler] = field(default_factory=dict)
 
-    # 커플러 → (q1의 포트명, q2의 포트명). 배정 로직은 FP/GP에서 채운다 — 여기선 필드만 정의.
-    port_assignment: dict[tuple[int, int], tuple[str, str]] = field(default_factory=dict)
+    # 커플러 → (q1 쪽 포트 좌표, q2 쪽 포트 좌표). 2026-09-21 이전엔 port_assignment
+    # (포트 "이름" 쌍, p_top_left 등 고정 4슬롯)이었다 — 포트가 이웃 방향으로 계산되며
+    # (qubit_port_toward, core/floorplan.py의 build_ports) 이름 있는 슬롯 자체가
+    # 없어졌으므로 좌표를 직접 담는다. 계산 로직은 FP에서 채운다 — 여기선 필드만 정의.
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]] = field(default_factory=dict)
 
     # 커플러 → FP가 확정한 배치 후보 영역(Coupler.region() 결과, AABB (x0,x1,y0,y1)).
-    # port_assignment와 같은 패턴(값 자체는 Coupler가 아니라 ChipState의 dict에 둠)을
+    # ports와 같은 패턴(값 자체는 Coupler가 아니라 ChipState의 dict에 둠)을
     # 따른다 — 둘 다 "FP가 큐빗/포트를 보고 계산해 커플러별로 확정하는 사실"이라는 같은
     # 종류의 데이터라, Coupler에 새 필드를 얹기보다 기존 관례를 그대로 잇는 게 일관적이다.
     # GP는 이 안에서만 세그먼트를 배치한다(박스 밖으로 넓히지 않음, core/globalplacement.py

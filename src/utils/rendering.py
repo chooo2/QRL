@@ -40,7 +40,7 @@ class Rendering:
 
         self._draw_die_boundary(ax, chip)
 
-        used_ports = self._used_ports(chip)
+        ports_by_qubit = self._ports_by_qubit(chip)
         total_segments = sum(len(c.segments) for c in chip.couplers.values())
         has_segments = total_segments > 0
         has_boxes = False
@@ -80,7 +80,7 @@ class Rendering:
 
         label_mode = self._label_mode(chip.num_qubits)
         for qid in sorted(chip.qubits):
-            self._draw_qubit(ax, chip, chip.qubits[qid], used_ports, label_mode)
+            self._draw_qubit(ax, chip, chip.qubits[qid], ports_by_qubit, label_mode)
 
         title = (f"{chip.processor_name} | qubits={chip.num_qubits} "
                  f"couplers={len(chip.couplers)} boxes={sum(1 for k in chip.couplers if k in chip.coupler_regions)} "
@@ -112,7 +112,7 @@ class Rendering:
             facecolor="none", edgecolor="black", linewidth=1.3, zorder=0,
         ))
 
-    def _draw_qubit(self, ax, chip: ChipState, qubit, used_ports: set, label_mode: str):
+    def _draw_qubit(self, ax, chip: ChipState, qubit, ports_by_qubit: dict, label_mode: str):
         x0, x1 = qubit.x - qubit.w / 2.0, qubit.x + qubit.w / 2.0
         y0, y1 = qubit.y - qubit.h / 2.0, qubit.y + qubit.h / 2.0
         oob = not self._in_die(x0, x1, y0, y1, chip)
@@ -125,27 +125,16 @@ class Rendering:
             zorder=7 if oob else 4,
         ))
 
-        if label_mode != "none":
-            port_r = 0.045 * min(qubit.w, qubit.h)
-            for name, (px, py) in qubit.ports.items():
-                is_used = (qubit.id, name) in used_ports
-                ax.add_patch(patches.Circle(
-                    (px, py), port_r,
-                    facecolor="#ff7f0e" if is_used else "#888888",
-                    edgecolor="none", alpha=0.9 if is_used else 0.55,
-                    zorder=6 if is_used else 5,
-                ))
-        else:
-            # 라벨 없는 초밀집 모드(eagle 등)에서도 포트는 남긴다 — 마커만 조금 더 작게.
-            port_r = 0.03 * min(qubit.w, qubit.h)
-            for name, (px, py) in qubit.ports.items():
-                is_used = (qubit.id, name) in used_ports
-                ax.add_patch(patches.Circle(
-                    (px, py), port_r,
-                    facecolor="#ff7f0e" if is_used else "#888888",
-                    edgecolor="none", alpha=0.9 if is_used else 0.45,
-                    zorder=6 if is_used else 5,
-                ))
+        # 2026-09-21: 포트가 이웃 방향(qubit_port_toward)으로 바뀌며 "미사용 슬롯"이라는
+        # 개념 자체가 없어졌다 — 큐빗은 실제 이웃 수만큼만 포트를 갖고, 전부 쓰인다.
+        # 그래서 회색(미사용)/주황(사용) 구분 없이 전부 같은 색으로 그린다.
+        port_r = (0.045 if label_mode != "none" else 0.03) * min(qubit.w, qubit.h)
+        for px, py in ports_by_qubit.get(qubit.id, []):
+            ax.add_patch(patches.Circle(
+                (px, py), port_r,
+                facecolor="#ff7f0e", edgecolor="none", alpha=0.9,
+                zorder=6,
+            ))
 
         if label_mode == "full":
             ax.text(qubit.x, qubit.y, f"{qubit.id}\n{qubit.f:.2f}GHz",
@@ -156,11 +145,9 @@ class Rendering:
 
     def _draw_coupler_line(self, ax, chip: ChipState, coupler):
         q1, q2 = chip.qubits[coupler.q1], chip.qubits[coupler.q2]
-        assignment = chip.port_assignment.get((coupler.q1, coupler.q2))
-        if assignment is not None:
-            p1_name, p2_name = assignment
-            x0, y0 = q1.ports[p1_name]
-            x1, y1 = q2.ports[p2_name]
+        pts = chip.ports.get((coupler.q1, coupler.q2))
+        if pts is not None:
+            (x0, y0), (x1, y1) = pts
         else:
             x0, y0 = q1.x, q1.y
             x1, y1 = q2.x, q2.y
@@ -195,12 +182,11 @@ class Rendering:
     # 남음) — 포트-포트 직선을 경고색 점선으로 그려 "여기 배선이 빠졌다"를 표시한다.
     def _draw_coupler_failed(self, ax, chip: ChipState, coupler):
         q1, q2 = chip.qubits[coupler.q1], chip.qubits[coupler.q2]
-        assignment = chip.port_assignment.get((coupler.q1, coupler.q2))
-        if assignment is None:
+        pts = chip.ports.get((coupler.q1, coupler.q2))
+        if pts is None:
             x0, y0, x1, y1 = q1.x, q1.y, q2.x, q2.y
         else:
-            p1_name, p2_name = assignment
-            (x0, y0), (x1, y1) = q1.ports[p1_name], q2.ports[p2_name]
+            (x0, y0), (x1, y1) = pts
         ax.plot([x0, x1], [y0, y1], color=_OOB_COLOR, linewidth=1.3,
                 linestyle=":", alpha=0.75, zorder=5)
 
@@ -216,7 +202,7 @@ class Rendering:
                 facecolor=color, alpha=0.55, edgecolor=color, linewidth=0.4, zorder=3,
             ))
 
-    # FP가 assign_ports 직후 확정한 배치 후보 영역(ChipState.coupler_regions) — GP 이전
+    # FP가 build_ports 직후 확정한 배치 후보 영역(ChipState.coupler_regions) — GP 이전
     # (output/0_FP/)에도 이미 존재하고, GP 이후로는 GP의 하드 탐색 범위 그 자체가 된다.
     # 옅은 채움 + 점선으로, 그 안에 그려질 세그먼트/bbox()보다 눈에 덜 띄게 깔아 둔다.
     # 테두리는 채움과 다른(더 짙은) 회색+alpha를 쓴다 — Rectangle에 공용 alpha= 하나만
@@ -253,8 +239,7 @@ class Rendering:
         handles = [
             patches.Patch(facecolor="none", edgecolor="black", linewidth=1.3, label="die boundary"),
             patches.Patch(facecolor="#dbe9f6", edgecolor="#1f4e79", label="qubit"),
-            plt.Line2D([], [], marker="o", color="none", markerfacecolor="#888888", markersize=6, label="port (unused)"),
-            plt.Line2D([], [], marker="o", color="none", markerfacecolor="#ff7f0e", markersize=6, label="port (assigned)"),
+            plt.Line2D([], [], marker="o", color="none", markerfacecolor="#ff7f0e", markersize=6, label="port"),
             plt.Line2D([], [], color="#4c72b0", linewidth=1.5, label="coupler"),
         ]
         if has_segments:
@@ -298,12 +283,16 @@ class Rendering:
         hue = (coupler_id * 0.6180339887498949) % 1.0
         return hsv_to_rgb((hue, 0.65, 0.85))
 
-    def _used_ports(self, chip: ChipState) -> set:
-        used = set()
-        for (q1, q2), (p1, p2) in chip.port_assignment.items():
-            used.add((q1, p1))
-            used.add((q2, p2))
-        return used
+    # 큐빗 id -> 그 큐빗이 갖는 모든 포트 좌표(이웃마다 하나씩, core/state.py의
+    # qubit_port_toward). 2026-09-21 이전엔 "이 큐빗의 4개 고정 슬롯 중 어느 게 실제로
+    # 이웃에 배정됐는지"(used_ports)였는데, 이제 포트 자체가 이웃 수만큼만 존재해 전부
+    # "사용됨"이므로 그 구분이 없어졌다.
+    def _ports_by_qubit(self, chip: ChipState) -> dict:
+        by_qubit: dict[int, list] = {}
+        for (q1, q2), (p1, p2) in chip.ports.items():
+            by_qubit.setdefault(q1, []).append(p1)
+            by_qubit.setdefault(q2, []).append(p2)
+        return by_qubit
 
     def _in_die(self, x0, x1, y0, y1, chip: ChipState, eps: float = 1e-6) -> bool:
         return x0 >= -eps and x1 <= chip.chip_width + eps and y0 >= -eps and y1 <= chip.chip_height + eps

@@ -232,11 +232,11 @@ def compute_drc(
     qc_overlap = 0
     for coupler, seg in _all_segments(state):
         sbox = _segment_aabb(coupler, seg)
-        assignment = state.port_assignment.get((coupler.q1, coupler.q2))
+        own_ports = state.ports.get((coupler.q1, coupler.q2))
         for i, q in state.qubits.items():
             if not _aabb_overlap(sbox, _qubit_aabb(q)):
                 continue
-            if coupler_own_port_cell(coupler, i, q, assignment, sbox):
+            if coupler_own_port_cell(coupler, i, own_ports, sbox):
                 continue
             qc_overlap += 1
 

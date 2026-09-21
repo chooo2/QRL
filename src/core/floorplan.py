@@ -50,7 +50,7 @@ from dataclasses import replace
 import networkx as nx
 import numpy as np
 
-from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit
+from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, qubit_port_toward
 
 
 # strict 모드에서 비평면 그래프를 만났을 때 발생 — 단일 레이어 교차 0이 불가능함을 뜻함.
@@ -797,100 +797,29 @@ def _spring_refine_coordinate(pos: np.ndarray, edges: list[tuple[int, int]],
 
 
 # ---------------------------------------------------------------------------
-# 포트 배정 — 각도 기반 순환 순서 보존
+# 포트 계산 — 이웃 방향 레이-교점 (2026-09-21, 고정 4슬롯 각도-회전 배정을 대체)
 # ---------------------------------------------------------------------------
 #
-# 예전 그리디 버전(2026-09-16까지)은 커플러를 하나씩 순서대로 훑으며 각 큐빗에 "그때 비어
-# 있는 후보 포트"를 배정했다. 이 방식은 같은 큐빗에 물린 커플러 여러 개가 서로 다른 순서로
-# 처리되면서 포트를 "꼬아서" 배정할 수 있다 — 예: 이웃이 각도순으로 A,B,C,D인데 포트를
-# A→p_top_right, B→p_bottom_right, C→p_top_left, D→p_bottom_left처럼 배정하면 A-큐빗과
-# C-큐빗으로 가는 두 선이 큐빗 바로 앞에서 서로 교차한다. count_crossings()는 큐빗 "중심"
-# 기준이고 정점을 공유하는 엣지 쌍은 애초에 비교 대상에서 뺀다(같은 점에서 만나는 두 선은
-# "교차"가 아니라는 일반적인 그래프 교차 정의를 따른 것) — 그래서 이 포트-레벨 꼬임은
-# FP의 교차-0 검증을 통과한 채로 남는다. 렌더링(utils/rendering.py)이 포트-포트 직선을
-# 그리기 시작하면서 grid_25 9건, xtree_53 8건으로 실측됐다(전부 정점 공유 쌍).
+# 예전(고정 4슬롯, p_top_left 등): 포트 4개를 큐빗 코너 근처에 고정해 두고, 이웃들을
+# "각도순 순환 순서를 보존하는 회전"으로 그 슬롯에 맞춰 배정했다(그 배정 로직의 상세
+# 근거는 git 이력 참고). 문제는 그 4슬롯이 전부 좌/우 변(x축)에만 있어서(off_x=±w/2
+# 고정) 차수 3~4인 큐빗은 실제 이웃 방향과 배정된 포트 변이 어긋나는 경우가 구조적으로
+# 생겼다 — 큐빗 몸체가 "박스가 뻗어가는 방향"과 같은 쪽에 있게 되는 경우(core/state.py
+# region()의 "케이스 A" 주석 참고), 819개 박스-자기큐빗 겹침 쌍 중 185개가 이 경우였다
+# (2026-09-21 세션 보고서).
 #
-# 고친 방식: 같은 큐빗에서 나가는 선들은 "이웃을 각도순으로 정렬한 순서"와 "배정된 포트를
-# 각도순으로 정렬한 순서"가 일치하기만 하면 서로 교차할 수 없다 — 포트 4개는 전부 큐빗
-# 코너(중심에서 최대 ~283um)에 몰려 있고 이웃은 보통 수백~수천 um 밖에 있어서, 포트에서
-# 뻗어나가는 선의 방향은 사실상 "그 포트의 각도" 자체로 근사되기 때문이다(코너 오프셋이
-# 이웃까지 거리에 비해 작을수록 이 근사가 좋아진다 — 이 저장소 규모에서는 충분히 좋다).
-# 그래서 이웃을 atan2로 정렬하고, 포트 4개도 atan2로 정렬한 뒤, 순서를 그대로 옮겨 붙이면
-# (필요하면 회전만 시켜서) 같은 큐빗에서 나가는 엣지끼리는 교차가 원천적으로 불가능하다.
-
-_PORT_NAMES = ("p_top_left", "p_top_right", "p_bottom_left", "p_bottom_right")
-
-
-def _port_angle(qubit: Qubit, port_name: str) -> float:
-    # ports 프로퍼티는 qubit.x/y에 오프셋을 더한 절대좌표를 돌려주지만, 각도 계산에선 그
-    # 오프셋(off_x, off_y)만 의미가 있고 qubit.x/y는 빼는 과정에서 상쇄된다 — 그래서 이
-    # 함수는 qubit.x/y가 아직 최종값이 아니어도(_place()에서 assign_ports가 new_qubits
-    # 생성보다 먼저 호출됨) 항상 안전하다.
-    px, py = qubit.ports[port_name]
-    return math.atan2(py - qubit.y, px - qubit.x)
-
-
-def _angular_diff(a: float, b: float) -> float:
-    d = abs(a - b) % (2.0 * math.pi)
-    return min(d, 2.0 * math.pi - d)
-
-
-# 큐빗 하나의 이웃들을 각도순 순환 순서를 보존하며 포트에 배정한다 (배정 근거는 위 섹션
-# 주석 참고). 포트 4개를 각도순으로 고정해 두고, 이웃 목록(각도순 정렬, 길이 k<=4)을 그
-# 순서에 "회전 오프셋" 하나로 통째로 옮겨 붙인다 — 회전 오프셋은 4가지뿐이고(포트가 4개),
-# 그중 이웃-포트 각도 차이 합이 최소인 걸 고른다.
+# 고친 방식: 01_mainref(utils/crosstalk.py::_pad_boundary_point)를 이식해, 큐빗
+# 중심에서 "실제 그 이웃 쪽으로" 쏜 레이가 큐빗 사각형(w x h)과 만나는 점을 그 (큐빗,이웃)
+# 쌍 전용 포트로 쓴다(core/state.py의 qubit_port_toward). 이웃마다 독립적으로 계산되므로
+# "여러 이웃을 4개 고정 슬롯에 맞춰야" 하는 배정 문제 자체가 없어진다 — (큐빗,이웃) 쌍마다
+# 포트가 유일하게 결정된다. 실측(2026-09-21): 케이스 A 185→0, 박스-자기큐빗 겹침
+# 364(핀 적용 후)→0.
 #
-# 이 "연속 구간 회전" 방식이 차수(k)별로 놓치는 배정이 있는지 확인해봤다:
-#   - k=4(포트 전부 사용): 두 원형 4-순열 사이에서 순서를 보존하는 전단사는 정확히 회전
-#     4가지뿐이다(수학적으로 전부). 놓치는 배정 없음.
-#   - k=3(포트 1개 미사용): 4개 중 1개를 빼면 남는 3개는 원형에서 항상 "연속"이다(4개짜리
-#     원을 1점 제거하면 나머지는 무조건 이어져 있음) — 그래서 회전 4가지가 곧
-#     C(4,3)=4가지 부분집합 전부와 일치한다. 놓치는 배정 없음.
-#   - k<=2: 회전 방식은 "인접한 포트 쌍"만 만든다 — 반대쪽 코너끼리(예: p_top_right·
-#     p_bottom_left) 쓰는 게 더 각도 오차가 작은 경우를 놓칠 수 있다. 다만 어떤 조합이든
-#     "순서만 보존하면" 교차는 안 생기므로(교차 금지 조건은 인접을 요구하지 않는다) 이건
-#     순수히 미관(각도 오차) 문제지 교차 문제가 아니다. 4가지 경우 전부를 동일한 코드
-#     경로로 처리하는 단순함이 이 작은 손해보다 낫다고 판단했다.
-def _assign_qubit_ports(qubit: Qubit, neighbor_ids: list[int],
-                        pos: dict[int, tuple[float, float]]) -> dict[int, str]:
-    if not neighbor_ids:
-        return {}
-
-    qx, qy = pos[qubit.id]
-    ports_sorted = sorted(_PORT_NAMES, key=lambda p: _port_angle(qubit, p))
-
-    def neighbor_angle(nid: int) -> float:
-        return math.atan2(pos[nid][1] - qy, pos[nid][0] - qx)
-
-    neighbors_sorted = sorted(neighbor_ids, key=neighbor_angle)
-    k = len(neighbors_sorted)
-
-    best_offset, best_cost = 0, None
-    for r in range(4):
-        cost = sum(
-            _angular_diff(neighbor_angle(nid), _port_angle(qubit, ports_sorted[(r + i) % 4]))
-            for i, nid in enumerate(neighbors_sorted)
-        )
-        if best_cost is None or cost < best_cost:
-            best_offset, best_cost = r, cost
-
-    return {nid: ports_sorted[(best_offset + i) % 4] for i, nid in enumerate(neighbors_sorted)}
-
-
-# 큐빗별로 이웃 전체를 한 번에(_assign_qubit_ports) 배정한 뒤, 커플러의 양끝은 각자의
-# 결과를 그냥 읽기만 한다. q1과 q2는 서로 "합의"할 필요가 없다 — 포트는 큐빗마다 독립된
-# 4개짜리 로컬 자원이고(p_top_left 같은 이름이 q1과 q2에서 같은 이름이어도 물리적으로는
-# 전혀 다른 좌표), q1의 배정은 q1 자신의 이웃 각도만으로 정해지고 q2가 자기 쪽 포트를
-# 무엇으로 고르든 q1의 순환순서 보존에 전혀 영향을 주지 않는다(그 반대도 마찬가지) — 그래서
-# "한쪽은 순서를 지켰는데 다른 쪽에서 깨지는" 상황 자체가 구조적으로 불가능하다. 이건 어디까지나
-# "같은 큐빗을 공유하는 엣지끼리" 교차하지 않는다는 로컬 보장이라는 점은 유의: 큐빗을 공유하지
-# 않는 두 커플러의 포트-포트 직선이 칩 반대편 어딘가에서 교차하는 건 이 로컬 보장 범위 밖이고,
-# 그건 여전히 큐빗-중심 기준 임베딩(위쪽 count_crossings 기반 폴백 로직)이 책임진다 —
-# count_port_crossings()가 그 경계를 그대로 반영해 두 값을 나눠서 센다.
-# 커플러 목록에서 큐빗별 이웃 리스트(순서 무관, 중복 없음 — 같은 두 큐빗 사이 커플러는
-# 하나뿐이라 자연히 중복이 안 생긴다)를 뽑는다. assign_ports와 _resolve_box_overlaps
-# (아래) 둘 다 "큐빗이 움직이면 그 이웃들의 포트 배정을 다시 계산해야 한다"는 같은
-# 이유로 이 인접 정보가 필요해서 공용 함수로 뺐다.
+# 포트 교차(같은 큐빗에서 나가는 두 선이 그 큐빗 바로 앞에서 서로 교차하는 것)는 왜 여전히
+# 0인가: 포트가 실제로 "그 이웃을 향한" 변 위에 있으므로, 포트의 각도는 이웃의 각도와
+# 사실상 같다(레이 방향 그대로) — 그래서 같은 큐빗에서 나가는 포트들의 원형 순서가 이웃
+# 원형 순서와 항상 일치한다(연속구간 회전으로 "맞춰야" 했던 예전과 달리, 애초에 어긋날
+# 수가 없다). count_port_crossings()로 이 불변식을 여전히 사후 검증한다(아래).
 def _coupler_adjacency(couplers: dict[tuple[int, int], Coupler]) -> dict[int, list[int]]:
     adj: dict[int, list[int]] = defaultdict(list)
     for q1, q2 in couplers:
@@ -899,54 +828,83 @@ def _coupler_adjacency(couplers: dict[tuple[int, int], Coupler]) -> dict[int, li
     return adj
 
 
-def assign_ports(
+# 커플러마다 (q1 쪽 포트, q2 쪽 포트) 좌표를 계산한다. 차수 4 제한은 그대로 둔다 —
+# 포트 배정 자체는 더 이상 필요 없지만, qiskit-metal TransmonPocket이 물리적으로
+# 가질 수 있는 커넥터 패드 수(연구 결과 보고서 참고: loc_W/loc_H가 {-1,+1} 조합 4개,
+# TransmonPocket6도 6개가 한계)라는 별개의 하드웨어 제약은 여전히 유효하다.
+def build_ports(
     couplers: dict[tuple[int, int], Coupler],
-    pos: dict[int, tuple[float, float]],
     qubits: dict[int, Qubit],
     processor_name: str = "?",
-) -> dict[tuple[int, int], tuple[str, str]]:
+) -> dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]]:
     adj = _coupler_adjacency(couplers)
-
     for qid, neighbor_ids in adj.items():
         if len(neighbor_ids) > 4:
             raise PlacementInfeasibleError(
                 f"{processor_name}: qubit {qid}의 차수가 {len(neighbor_ids)}로 4를 초과합니다 "
-                "(4포트 설계로는 배치 불가)."
+                "(qiskit-metal TransmonPocket 물리 커넥터 한도)."
             )
+    return {
+        (u, v): (
+            qubit_port_toward(qubits[u], qubits[v].x, qubits[v].y),
+            qubit_port_toward(qubits[v], qubits[u].x, qubits[u].y),
+        )
+        for u, v in couplers
+    }
 
-    port_of = {qid: _assign_qubit_ports(qubits[qid], neighbor_ids, pos) for qid, neighbor_ids in adj.items()}
 
-    return {(q1, q2): (port_of[q1][q2], port_of[q2][q1]) for q1, q2 in sorted(couplers)}
+# 큐빗 일부가 이동한 뒤(_try_resolve_candidate) 그 이동에 실제로 영향받는 커플러만 다시
+# 계산한다 — (큐빗,이웃) 포트가 서로 독립이므로(위 build_ports 주석 참고), 옮긴 큐빗의
+# "이웃의 다른 이웃" 전체를 재계산해야 했던 예전(_assign_qubit_ports, 고정 슬롯 재배정은
+# 그 큐빗의 이웃 전체에 영향)과 달리, 두 끝 중 하나라도 moved_qubit_ids에 있는 커플러만
+# 건드리면 충분하다.
+def rebuild_ports(
+    old_ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
+    couplers: dict[tuple[int, int], Coupler],
+    moved_qubit_ids: set[int],
+    qubits: dict[int, Qubit],
+) -> dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]]:
+    new_ports = dict(old_ports)
+    for key in couplers:
+        u, v = key
+        if u not in moved_qubit_ids and v not in moved_qubit_ids:
+            continue
+        new_ports[key] = (
+            qubit_port_toward(qubits[u], qubits[v].x, qubits[v].y),
+            qubit_port_toward(qubits[v], qubits[u].x, qubits[u].y),
+        )
+    return new_ports
 
 
 def _coupler_port_line(
     qubits: dict[int, Qubit], couplers: dict[tuple[int, int], Coupler],
-    port_assignment: dict[tuple[int, int], tuple[str, str]], key: tuple[int, int],
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]], key: tuple[int, int],
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     c = couplers[key]
     q1, q2 = qubits[c.q1], qubits[c.q2]
-    assignment = port_assignment.get(key)
-    if assignment is None:
+    pts = ports.get(key)
+    if pts is None:
         return (q1.x, q1.y), (q2.x, q2.y)
-    p1_name, p2_name = assignment
-    return q1.ports[p1_name], q2.ports[p2_name]
+    return pts
 
 
 # 실제 배선이 나가는 포트-포트 직선 기준 교차 개수. count_crossings()(큐빗 중심 기준)와
-# 달리 정점(큐빗)을 공유하는 엣지 쌍도 제외하지 않는다 — assign_ports의 버그는 정확히 그
-# 경우(같은 큐빗의 서로 다른 코너에서 출발하는 두 선)에서 나므로, 그 쌍을 빼면 이 검증
-# 함수 자체가 원래 문제를 못 본다. 반환값을 (같은 큐빗을 공유하는 쌍의 교차, 공유하지 않는
-# 쌍의 교차)로 나누는 이유는 두 값의 "보장 주체"가 다르기 때문이다 — 전자는 assign_ports
-# 하나만으로 항상 0이어야 하고(수학적 불변식, 위 _assign_qubit_ports 주석의 k=3/4 분석
-# 참고), 후자는 큐빗-중심 기준 임베딩이 포트 오프셋 아래에서도 여유가 있었는지에 달려 있어
-# FP가 원래부터 보장하던 것의 근사치일 뿐 새 불변식이 아니다. O(E^2)라 E~150(eagle) 기준
-# 만 쌍 남짓 — 매 FP 호출마다 돌려도 무시할 수준이라 별도 최적화는 하지 않는다.
+# 달리 정점(큐빗)을 공유하는 엣지 쌍도 제외하지 않는다 — 예전 고정 4슬롯 배정의 버그는
+# 정확히 그 경우(같은 큐빗의 서로 다른 코너에서 출발하는 두 선)에서 났으므로, 그 쌍을
+# 빼면 이 검증 함수 자체가 원래 문제를 못 본다. 이웃 방향 포트(build_ports)로 바뀐
+# 뒤로는 이론상 shared 쪽이 항상 0이어야 하지만(위 build_ports 주석 참고 — 포트 각도가
+# 이웃 각도와 사실상 같아 원형 순서가 자동으로 보존된다), 사후 검증은 그대로 남긴다.
+# 반환값을 (같은 큐빗을 공유하는 쌍의 교차, 공유하지 않는 쌍의 교차)로 나누는 이유는 두
+# 값의 "보장 주체"가 다르기 때문이다 — 전자는 포트 계산 자체의 기하학적 불변식이고, 후자는
+# 큐빗-중심 기준 임베딩이 포트 오프셋 아래에서도 여유가 있었는지에 달려 있어 FP가 원래부터
+# 보장하던 것의 근사치일 뿐 새 불변식이 아니다. O(E^2)라 E~150(eagle) 기준 만 쌍 남짓 —
+# 매 FP 호출마다 돌려도 무시할 수준이라 별도 최적화는 하지 않는다.
 def count_port_crossings(
     qubits: dict[int, Qubit], couplers: dict[tuple[int, int], Coupler],
-    port_assignment: dict[tuple[int, int], tuple[str, str]],
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
 ) -> tuple[int, int]:
     keys = sorted(couplers)
-    lines = {key: _coupler_port_line(qubits, couplers, port_assignment, key) for key in keys}
+    lines = {key: _coupler_port_line(qubits, couplers, ports, key) for key in keys}
 
     shared_qubit_crossings = 0
     other_crossings = 0
@@ -997,12 +955,196 @@ def count_port_crossings(
 # 포트 교차 네 게이트는 박스-큐빗이든 박스-박스든 동일하게 적용한다(_try_resolve_candidate
 # 로 공용화).
 
-_BOX_QUBIT_RESOLVE_MAX_ITERS = 20
+# core/state.py의 Coupler.region()이 2026-09-21에 "핀"(자기 큐빗 앞에서 박스를 멈추는
+# 메커니즘)을 얻은 뒤, 박스 모양이 큐빗을 살짝만 옮겨도 핀 on/off가 뒤집히며 덜 매끄럽게
+# 바뀔 수 있게 됐다 — 그 결과 이 반복이 "진전 없음"으로 멈추기까지 걸리는 반복 수가 늘 수
+# 있다(실측: aspen_11에서 20회 한도 안에 멈추면 박스-박스 위반이 3->4건으로 오히려
+# 늘었는데, 22회까지 마저 돌리면 3->3건(진전은 없지만 최소한 나빠지지도 않음)으로
+# 안정된다). 30으로 올려 그 여유를 확보한다 — 이 반복 자체는 이미 "진전 없으면 즉시
+# 멈춘다"(아래 for-loop의 `if not progress: break`)는 조기 종료 조건이 있으므로, 한도를
+# 넉넉히 잡아도 대부분의 칩(진전이 훨씬 일찍 끝남)에서는 비용이 늘지 않는다.
+_BOX_QUBIT_RESOLVE_MAX_ITERS = 30
 
 
 def _qubit_aabb(q: Qubit) -> tuple[float, float, float, float]:
     return (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
 
+def _translate_box(
+    box: tuple[float, float, float, float],
+    dx: float,
+    dy: float,
+) -> tuple[float, float, float, float]:
+    """
+    Coupler box의 크기는 유지하고 위치만 이동한다.
+    """
+    x0, x1, y0, y1 = box
+
+    return (
+        x0 + dx,
+        x1 + dx,
+        y0 + dy,
+        y1 + dy,
+    )
+
+def _box_inside_die(
+    box: tuple[float, float, float, float],
+    chip_width: float,
+    chip_height: float,
+) -> bool:
+    """
+    Coupler box 전체가 chip 내부에 있는지 확인한다.
+    """
+    x0, x1, y0, y1 = box
+
+    return (
+        x0 >= 0.0
+        and y0 >= 0.0
+        and x1 <= chip_width
+        and y1 <= chip_height
+    )
+
+def _boxes_overlap(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+) -> bool:
+    """
+    두 Coupler box가 서로 겹치는지 확인한다.
+    """
+    ax0, ax1, ay0, ay1 = a
+    bx0, bx1, by0, by1 = b
+
+    return (
+        ax0 < bx1 - AABB_EPS_UM
+        and bx0 < ax1 - AABB_EPS_UM
+        and ay0 < by1 - AABB_EPS_UM
+        and by0 < ay1 - AABB_EPS_UM
+    )
+
+def _box_overlaps_qubits(
+    box: tuple[float, float, float, float],
+    coupler_key: tuple[int, int],
+    qubits: dict[int, Qubit],
+) -> bool:
+    """
+    Coupler box가 자기 양 끝 Qubit을 제외한
+    다른 Qubit과 겹치는지 확인한다.
+    """
+    for qid, q in qubits.items():
+
+        # 이 Coupler가 연결하는 두 Qubit은 제외
+        if qid in coupler_key:
+            continue
+
+        qubit_box = _qubit_aabb(q)
+
+        if _boxes_overlap(box, qubit_box):
+            return True
+
+    return False
+
+def _find_translated_box(
+    key: tuple[int, int],
+    box: tuple[float, float, float, float],
+    qubits: dict[int, Qubit],
+    regions: dict[tuple[int, int], tuple[float, float, float, float] | None],
+    chip_width: float,
+    chip_height: float,
+    cell: float,
+    max_shift_cells: int = 3,
+) -> tuple[float, float, float, float] | None:
+    """
+    Coupler box의 크기는 유지한 채 위치만 이동하여
+    legal한 위치를 찾는다.
+    """
+
+    candidates = []
+
+    for di in range(-max_shift_cells, max_shift_cells + 1):
+        for dj in range(-max_shift_cells, max_shift_cells + 1):
+
+            if di == 0 and dj == 0:
+                continue
+
+            distance = abs(di) + abs(dj)
+            candidates.append((distance, di, dj))
+
+    # 원래 위치에서 가까운 곳부터 탐색
+    candidates.sort()
+
+    for _, di, dj in candidates:
+
+        candidate = _translate_box(
+            box,
+            di * cell,
+            dj * cell,
+        )
+
+        # 칩 밖이면 제외
+        if not _box_inside_die(
+            candidate,
+            chip_width,
+            chip_height,
+        ):
+            continue
+
+        # 다른 Qubit과 겹치면 제외
+        if _box_overlaps_qubits(
+            candidate,
+            key,
+            qubits,
+        ):
+            continue
+
+        # 이미 확정된 다른 Coupler box와 겹치면 제외
+        conflict = False
+
+        for other_key, other_box in regions.items():
+
+            if other_key == key or other_box is None:
+                continue
+
+            if _boxes_overlap(candidate, other_box):
+                conflict = True
+                break
+
+        if conflict:
+            continue
+
+        # 조건을 전부 만족하는 첫 위치
+        return candidate
+
+    return None
+
+def _box_is_legal(
+    key: tuple[int, int],
+    box: tuple[float, float, float, float],
+    qubits: dict[int, Qubit],
+    regions: dict[tuple[int, int], tuple[float, float, float, float] | None],
+    chip_width: float,
+    chip_height: float,
+) -> bool:
+    """
+    현재 Coupler box 위치가 legal한지 확인한다.
+    """
+
+    # 칩 내부에 있어야 함
+    if not _box_inside_die(box, chip_width, chip_height):
+        return False
+
+    # 제3 Qubit과 겹치면 안 됨
+    if _box_overlaps_qubits(box, key, qubits):
+        return False
+
+    # 다른 Coupler box와 겹치면 안 됨
+    for other_key, other_box in regions.items():
+
+        if other_key == key or other_box is None:
+            continue
+
+        if _boxes_overlap(box, other_box):
+            return False
+
+    return True
 
 # 커플러 박스가 자기 소유가 아닌(coupler.is_own_qubit로 판정) 큐빗과 겹치는 (key, qid) 쌍
 # 전부. 자기 q1/q2와의 겹침은 정상이다(박스가 포트에서 시작하므로) — core.state.
@@ -1167,29 +1309,8 @@ def _violates_min_spacing(
     return False
 
 
-# affected_qids(이번에 옮긴 큐빗 + 그 이웃들, 앵귤러 순서가 바뀔 수 있는 전체 집합)만
-# 다시 배정하고 나머지는 그대로 둔다 — _assign_qubit_ports는 큐빗 하나의 이웃 "전체"를
-# 한 번에 최적 회전으로 배정하므로(부분 갱신 불가), 옮긴 큐빗 자신과 그 이웃 각각에 대해
-# 전체 재계산이 필요하다. 그 밖의 큐빗(이번에 옮긴 큐빗과 안 이어진)의 포트는 위치가
-# 안 바뀌었으니 그대로 유지한다.
-def _rebuild_port_assignment(
-    old_assignment: dict[tuple[int, int], tuple[str, str]],
-    couplers: dict[tuple[int, int], Coupler],
-    port_of: dict[int, dict[int, str]],
-) -> dict[tuple[int, int], tuple[str, str]]:
-    new_assignment = dict(old_assignment)
-    for key in couplers:
-        u, v = key
-        old_pu, old_pv = old_assignment[key]
-        pu = port_of[u][v] if u in port_of else old_pu
-        pv = port_of[v][u] if v in port_of else old_pv
-        if (pu, pv) != (old_pu, old_pv):
-            new_assignment[key] = (pu, pv)
-    return new_assignment
-
-
 # 큐빗 이동 후보 하나(박스-큐빗 해소면 1개, 박스-박스 해소면 2개)를 네 게이트로 검증하고
-# 통과하면 새 qubits/port_assignment/변위 리스트를 돌려준다 — 어느 게이트든 걸리면 None
+# 통과하면 새 qubits/ports/변위 리스트를 돌려준다 — 어느 게이트든 걸리면 None
 # (그 후보 자체를 안 씀, 페널티가 아니라 후보 배제). 박스-큐빗/박스-박스 두 위반 종류가
 # 정확히 같은 검증을 거치게 하려고 공용화했다:
 #   1) die 경계 — 옮긴 큐빗 각각이 die 밖으로 나가면 버림.
@@ -1198,18 +1319,22 @@ def _rebuild_port_assignment(
 #   3) 임베딩 불변 — cmap 기준 proper crossing이 늘면 버림(LG의 _crossing_safe와 같은
 #      원칙, 페널티 아니라 후보 제외). moves에 든 큐빗들을 전부 동시에 옮긴 상태로 한 번에
 #      검사한다(_resolve_qq가 두 큐빗을 한 후보로 같이 검사하는 것과 같음).
-#   4) 포트 교차 — 옮긴 큐빗들 + 그 이웃 전체의 포트를 다시 배정한 뒤(_assign_qubit_ports,
-#      부분 갱신 불가라 영향받는 큐빗마다 전체 재계산) count_port_crossings가 공유/비공유
-#      어느 쪽이든 늘면 버림.
+#   4) 포트 교차 — 옮긴 큐빗에 닿은 커플러만 포트를 다시 계산한 뒤(rebuild_ports — 이웃
+#      방향 포트는 (큐빗,이웃) 쌍끼리 독립이라 예전 고정 슬롯 배정처럼 "이웃의 이웃까지"
+#      전체 재계산할 필요가 없다) count_port_crossings가 공유/비공유 어느 쪽이든 늘면 버림.
 def _try_resolve_candidate(
     qubits: dict[int, Qubit],
-    port_assignment: dict[tuple[int, int], tuple[str, str]],
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
     couplers: dict[tuple[int, int], Coupler],
     adj: dict[int, list[int]],
     cmap_edges: list[tuple[int, int]],
     chip_width: float, chip_height: float, min_sep: float,
     moves: dict[int, tuple[float, float]],
-) -> tuple[dict[int, Qubit], dict[tuple[int, int], tuple[str, str]], list[float]] | None:
+) -> tuple[
+    dict[int, Qubit],
+    dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
+    list[float],
+] | None:
     for qid, cand in moves.items():
         if _violates_die_bounds(qubits[qid], cand, chip_width, chip_height):
             return None
@@ -1223,23 +1348,18 @@ def _try_resolve_candidate(
        count_crossings(pos_before, cmap_edges, proper_only=True):
         return None
 
-    affected: set[int] = set(moves)
-    for qid in moves:
-        affected.update(adj.get(qid, []))
     trial_qubits = dict(qubits)
     for qid, cand in moves.items():
         trial_qubits[qid] = replace(qubits[qid], x=cand[0], y=cand[1])
-    port_of = {aid: _assign_qubit_ports(trial_qubits[aid], adj.get(aid, []), pos_after)
-               for aid in affected}
-    trial_assignment = _rebuild_port_assignment(port_assignment, couplers, port_of)
+    trial_ports = rebuild_ports(ports, couplers, set(moves), trial_qubits)
 
-    before_pc = count_port_crossings(qubits, couplers, port_assignment)
-    after_pc = count_port_crossings(trial_qubits, couplers, trial_assignment)
+    before_pc = count_port_crossings(qubits, couplers, ports)
+    after_pc = count_port_crossings(trial_qubits, couplers, trial_ports)
     if after_pc[0] > before_pc[0] or after_pc[1] > before_pc[1]:
         return None
 
     disps = [math.hypot(cand[0] - qubits[qid].x, cand[1] - qubits[qid].y) for qid, cand in moves.items()]
-    return trial_qubits, trial_assignment, disps
+    return trial_qubits, trial_ports, disps
 
 
 # 박스-제3큐빗 겹침과 박스-박스 겹침(공유 큐빗 없는 쌍만)을 같은 반복 루프에서 함께
@@ -1269,20 +1389,22 @@ def _try_resolve_candidate(
 # 올려 Floorplan.run()이 skipped에 기록하게 한다. "잔존 위반이 조금이라도 있으면 실패"로
 # 정의하지 않은 이유: 그러면 이 최선노력 메커니즘이 사실상 전부-아니면-전무가 되어 버려서,
 # 대부분 풀고 몇 건만 남기는 정상적인 부분 성공까지 칩 전체 스킵으로 날려버린다.
+
 def _resolve_box_overlaps(
     processor_name: str,
     qubits: dict[int, Qubit],
     couplers: dict[tuple[int, int], Coupler],
-    port_assignment: dict[tuple[int, int], tuple[str, str]],
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
     cmap_edges: list[tuple[int, int]],
     chip_width: float, chip_height: float,
     min_sep: float, cell: float,
 ) -> tuple[
-    dict[int, Qubit], dict[tuple[int, int], tuple[str, str]],
+    dict[int, Qubit],
+    dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
     dict[tuple[int, int], tuple[float, float, float, float] | None],
 ]:
     qubits = dict(qubits)
-    port_assignment = dict(port_assignment)
+    ports = dict(ports)
     adj = _coupler_adjacency(couplers)
 
     # region()이 돌려주는 박스가 이미 격자에 정렬돼 있다(2026-09-20, region()이 연속
@@ -1297,112 +1419,170 @@ def _resolve_box_overlaps(
         out: dict[tuple[int, int], tuple[float, float, float, float] | None] = {}
         for key in couplers:
             box = couplers[key].region(
-                qubits[key[0]], qubits[key[1]], *port_assignment[key],
+                qubits[key[0]], qubits[key[1]], *ports[key],
                 qubits, chip_width, chip_height,
             )
             out[key] = _snap_box_to_grid(box, cell) if box is not None else None
         return out
 
     regions = compute_regions()
+    initial_region_sizes = {}
+
+    for key, box in regions.items():
+        if box is None:
+            continue
+
+        x0, x1, y0, y1 = box
+
+        initial_region_sizes[key] = (
+            x1 - x0,   # width
+            y1 - y0,   # height
+        )
     n_initial_q = len(_box_third_party_violations(qubits, couplers, regions))
     n_initial_p = len(_box_pair_violations(couplers, regions))
-    qubit_disp: list[float] = []
-    moved_qubits: set[int] = set()
-    iterations_used = 0
+    # qubit_disp: list[float] = []
+    # moved_qubits: set[int] = set()
+    # iterations_used = 0
 
-    for iteration in range(_BOX_QUBIT_RESOLVE_MAX_ITERS):
-        iterations_used = iteration + 1
-        qviol = _box_third_party_violations(qubits, couplers, regions)
-        pviol = _box_pair_violations(couplers, regions)
-        if not qviol and not pviol:
-            break
+    fixed_regions = {}
 
-        # (종류, ..., 겹침면적) 튜플로 통일해 섞은 뒤 면적 내림차순으로 함께 처리한다.
-        combined = (
-            [("q", key, qid, area) for key, qid, area in qviol]
-            + [("p", ka, kb, area) for ka, kb, area in pviol]
+    for key, box in regions.items():
+        if box is None:
+            fixed_regions[key] = None
+            continue
+
+        if _box_is_legal(
+            key,
+            box,
+            qubits,
+            fixed_regions,
+            chip_width,
+            chip_height,
+        ):
+            fixed_regions[key] = box
+            continue
+
+        moved_box = _find_translated_box(
+            key,
+            box,
+            qubits,
+            fixed_regions,
+            chip_width,
+            chip_height,
+            cell,
+            max_shift_cells=3,
         )
-        combined.sort(key=lambda t: -t[-1])
 
-        progress = False
-        for item in combined:
-            if item[0] == "q":
-                _, key, qid, _area = item
-                box = regions[key]
-                q = qubits[qid]
-                # 같은 반복 안의 앞선 이동으로 이미 풀렸을 수 있음 — 재확인.
-                qx0, qx1, qy0, qy1 = _qubit_aabb(q)
-                x0, x1, y0, y1 = box
-                if min(x1, qx1) - max(x0, qx0) <= AABB_EPS_UM \
-                   or min(y1, qy1) - max(y0, qy0) <= AABB_EPS_UM:
-                    continue
-                cand = _push_qubit_out_of_box(q, box)
-                if cand is None:
-                    continue
-                moves = {qid: cand}
-            else:
-                _, ka, kb, _area = item
-                box_a, box_b = regions.get(ka), regions.get(kb)
-                if box_a is None or box_b is None:
-                    continue
-                # 같은 반복 안의 앞선 이동으로 이미 풀렸을 수 있음 — 재확인.
-                ax0, ax1, ay0, ay1 = box_a
-                bx0, bx1, by0, by1 = box_b
-                overlap_x = min(ax1, bx1) - max(ax0, bx0)
-                overlap_y = min(ay1, by1) - max(ay0, by0)
-                if overlap_x <= AABB_EPS_UM or overlap_y <= AABB_EPS_UM:
-                    continue
-                qid_a = _nearest_own_qubit(ka, qubits, box_b)
-                qid_b = _nearest_own_qubit(kb, qubits, box_a)
-                moves = _box_pair_push_candidates(
-                    qubits[qid_a], qid_a, box_a, qubits[qid_b], qid_b, box_b,
-                    overlap_x, overlap_y,
-                )
+        fixed_regions[key] = moved_box
 
-            result = _try_resolve_candidate(
-                qubits, port_assignment, couplers, adj, cmap_edges,
-                chip_width, chip_height, min_sep, moves,
-            )
-            if result is None:
-                continue
-            trial_qubits, trial_assignment, disps = result
-            qubits, port_assignment = trial_qubits, trial_assignment
-            qubit_disp.extend(disps)
-            moved_qubits.update(moves)
-            progress = True
+    regions = fixed_regions
 
-        regions = compute_regions()
-        if not progress:
-            break
+    for key, box in regions.items():
+        if box is None:
+            continue
+
+        initial_w, initial_h = initial_region_sizes[key]
+
+        x0, x1, y0, y1 = box
+        current_w = x1 - x0
+        current_h = y1 - y0
+
+        assert abs(current_w - initial_w) <= AABB_EPS_UM
+        assert abs(current_h - initial_h) <= AABB_EPS_UM
+
+    # for iteration in range(_BOX_QUBIT_RESOLVE_MAX_ITERS):
+    #     iterations_used = iteration + 1
+    #     qviol = _box_third_party_violations(qubits, couplers, regions)
+    #     pviol = _box_pair_violations(couplers, regions)
+    #     if not qviol and not pviol:
+    #         break
+
+    #     # (종류, ..., 겹침면적) 튜플로 통일해 섞은 뒤 면적 내림차순으로 함께 처리한다.
+    #     combined = (
+    #         [("q", key, qid, area) for key, qid, area in qviol]
+    #         + [("p", ka, kb, area) for ka, kb, area in pviol]
+    #     )
+    #     combined.sort(key=lambda t: -t[-1])
+
+    #     progress = False
+    #     for item in combined:
+    #         if item[0] == "q":
+    #             _, key, qid, _area = item
+    #             box = regions[key]
+    #             q = qubits[qid]
+    #             # 같은 반복 안의 앞선 이동으로 이미 풀렸을 수 있음 — 재확인.
+    #             qx0, qx1, qy0, qy1 = _qubit_aabb(q)
+    #             x0, x1, y0, y1 = box
+    #             if min(x1, qx1) - max(x0, qx0) <= AABB_EPS_UM \
+    #                or min(y1, qy1) - max(y0, qy0) <= AABB_EPS_UM:
+    #                 continue
+    #             cand = _push_qubit_out_of_box(q, box)
+    #             if cand is None:
+    #                 continue
+    #             moves = {qid: cand}
+    #         else:
+    #             _, ka, kb, _area = item
+    #             box_a, box_b = regions.get(ka), regions.get(kb)
+    #             if box_a is None or box_b is None:
+    #                 continue
+    #             # 같은 반복 안의 앞선 이동으로 이미 풀렸을 수 있음 — 재확인.
+    #             ax0, ax1, ay0, ay1 = box_a
+    #             bx0, bx1, by0, by1 = box_b
+    #             overlap_x = min(ax1, bx1) - max(ax0, bx0)
+    #             overlap_y = min(ay1, by1) - max(ay0, by0)
+    #             if overlap_x <= AABB_EPS_UM or overlap_y <= AABB_EPS_UM:
+    #                 continue
+    #             qid_a = _nearest_own_qubit(ka, qubits, box_b)
+    #             qid_b = _nearest_own_qubit(kb, qubits, box_a)
+    #             moves = _box_pair_push_candidates(
+    #                 qubits[qid_a], qid_a, box_a, qubits[qid_b], qid_b, box_b,
+    #                 overlap_x, overlap_y,
+    #             )
+
+    #         result = _try_resolve_candidate(
+    #             qubits, ports, couplers, adj, cmap_edges,
+    #             chip_width, chip_height, min_sep, moves,
+    #         )
+    #         if result is None:
+    #             continue
+    #         trial_qubits, trial_ports, disps = result
+    #         qubits, ports = trial_qubits, trial_ports
+    #         qubit_disp.extend(disps)
+    #         moved_qubits.update(moves)
+    #         progress = True
+
+    #     regions = compute_regions()
+    #     if not progress:
+    #         break
 
     residual_q = len(_box_third_party_violations(qubits, couplers, regions))
     residual_p = len(_box_pair_violations(couplers, regions))
 
-    if (n_initial_q + n_initial_p) > 0 and not moved_qubits:
-        raise PlacementInfeasibleError(
-            f"{processor_name}: 박스 겹침 {n_initial_q}건(박스-큐빗)+{n_initial_p}건"
-            "(박스-박스) 중 단 한 건도 해소하지 못했습니다(첫 반복부터 모든 후보가 "
-            "die 경계/최소간격/임베딩/포트교차 제약에 막힘) — 이 칩에서 이 메커니즘 "
-            "자체가 작동하지 않습니다."
-        )
+    # if (n_initial_q + n_initial_p) > 0 and not moved_qubits:
+    #     raise PlacementInfeasibleError(
+    #         f"{processor_name}: 박스 겹침 {n_initial_q}건(박스-큐빗)+{n_initial_p}건"
+    #         "(박스-박스) 중 단 한 건도 해소하지 못했습니다(첫 반복부터 모든 후보가 "
+    #         "die 경계/최소간격/임베딩/포트교차 제약에 막힘) — 이 칩에서 이 메커니즘 "
+    #         "자체가 작동하지 않습니다."
+    #     )
 
-    if residual_q > 0 or residual_p > 0:
-        logging.warning(
-            "[FP] %s: 박스 겹침 잔존 — 박스-큐빗 %d/%d건, 박스-박스 %d/%d건(반복 %d회 "
-            "소진 또는 진전 없음). 박스-큐빗 잔존은 region()의 가용 면적 확장이 흡수하지만 "
-            "박스-박스 잔존은 그런 폴백이 없다 — GP 경합으로 이어질 수 있다.",
-            processor_name, residual_q, n_initial_q, residual_p, n_initial_p, iterations_used,
-        )
+    # if residual_q > 0 or residual_p > 0:
+    #     logging.warning(
+    #         "[FP] %s: 박스 겹침 잔존 — 박스-큐빗 %d/%d건, 박스-박스 %d/%d건(반복 %d회 "
+    #         "소진 또는 진전 없음). 박스-큐빗 잔존은 region()의 가용 면적 확장이 흡수하지만 "
+    #         "박스-박스 잔존은 그런 폴백이 없다 — GP 경합으로 이어질 수 있다.",
+    #         processor_name, residual_q, n_initial_q, residual_p, n_initial_p, iterations_used,
+    #     )
 
-    logging.info(
-        "[FP] %s: 박스-큐빗 %d->%d건, 박스-박스 %d->%d건, 큐빗 %d개 이동"
-        "(변위 avg/max=%.2f/%.2f um, 반복 %d회)",
-        processor_name, n_initial_q, residual_q, n_initial_p, residual_p, len(moved_qubits),
-        sum(qubit_disp) / len(qubit_disp) if qubit_disp else 0.0,
-        max(qubit_disp) if qubit_disp else 0.0, iterations_used,
-    )
+    # logging.info(
+    #     "[FP] %s: 박스-큐빗 %d->%d건, 박스-박스 %d->%d건, 큐빗 %d개 이동"
+    #     "(변위 avg/max=%.2f/%.2f um, 반복 %d회)",
+    #     processor_name, n_initial_q, residual_q, n_initial_p, residual_p, len(moved_qubits),
+    #     sum(qubit_disp) / len(qubit_disp) if qubit_disp else 0.0,
+    #     max(qubit_disp) if qubit_disp else 0.0, iterations_used,
+    # )
 
-    return qubits, port_assignment, regions
+    return qubits, ports, regions
 
 
 # ---------------------------------------------------------------------------
@@ -1525,57 +1705,47 @@ class Floorplan:
                     f"(best achievable {achieved:.2f}um)"
                 )
 
-        # --- 포트 배정 -------------------------------------------------------------
+        # --- 포트 계산 -------------------------------------------------------------
         # count_port_crossings()로 실제 좌표를 검증할 것이므로, 자리표시자(x=y=0.0)가 아니라
-        # 최종 좌표가 반영된 new_qubits를 먼저 만들어 assign_ports/검증 둘 다에 쓴다
-        # (assign_ports 자체는 pos만 보고 포트 각도는 위치 무관이라 순서가 안 바뀌어도
-        # 맞지만, 검증은 절대좌표가 맞아야 의미가 있다).
+        # 최종 좌표가 반영된 new_qubits를 먼저 만들어 build_ports/검증 둘 다에 쓴다.
         new_qubits = {i: replace(state.qubits[i], x=pos[i][0], y=pos[i][1]) for i in range(n)}
-        port_assignment = assign_ports(state.couplers, pos, new_qubits, processor_name=state.processor_name)
+        ports = build_ports(state.couplers, new_qubits, processor_name=state.processor_name)
 
-        shared_xing, other_xing = count_port_crossings(new_qubits, state.couplers, port_assignment)
+        shared_xing, other_xing = count_port_crossings(new_qubits, state.couplers, ports)
         if shared_xing > 0:
             raise RuntimeError(
                 f"{state.processor_name}: 같은 큐빗을 공유하는 커플러 쌍 사이에 포트-포트 "
-                f"직선 교차가 {shared_xing}건 남았습니다 — assign_ports의 각도 기반 순환순서 "
-                "배정은 차수 3~4에서 이 경우를 수학적으로 0으로 만들어야 하므로 내부 버그입니다."
+                f"직선 교차가 {shared_xing}건 남았습니다 — 이웃 방향 포트(qubit_port_toward)는 "
+                "포트 각도가 이웃 각도와 사실상 같아 이 경우가 구조적으로 불가능해야 하므로 "
+                "내부 버그입니다."
             )
         if other_xing > 0:
             logging.warning(
                 "[FP] %s: 큐빗을 공유하지 않는 커플러 쌍 사이에 포트-포트 직선 교차가 %d건 "
-                "있습니다 — 큐빗-중심 기준 임베딩은 교차 0이지만, 포트가 중심에서 코너로 "
-                "치우친 만큼 실제 배선 기준으로는 아슬아슬했던 자리입니다. assign_ports는 "
-                "포트가 큐빗별 로컬 자원이라 이 경우를 고칠 권한이 없습니다 — "
-                "min_qubit_spacing_um을 늘리거나 GP가 처리해야 합니다.",
+                "있습니다 — 큐빗-중심 기준 임베딩은 교차 0이지만, 포트가 중심에서 경계로 "
+                "치우친 만큼 실제 배선 기준으로는 아슬아슬했던 자리입니다. 포트는 큐빗별 "
+                "로컬 자원이라 이 경우를 고칠 권한이 없습니다 — min_qubit_spacing_um을 "
+                "늘리거나 GP가 처리해야 합니다.",
                 state.processor_name, other_xing,
             )
 
         # --- 커플러 배치 후보 영역 확정 + 박스-제3큐빗 겹침 해소 -------------------
         # GP가 이 안에서만 세그먼트를 배치한다(core/globalplacement.py) — 즉 여기서부터는
-        # Coupler.region()의 "힌트"가 아니라 GP의 하드 탐색 범위다. 포트 배정이 끝난
-        # 뒤에만 계산 가능하다(region()이 port1/port2 이름을 받는다).
+        # Coupler.region()의 "힌트"가 아니라 GP의 하드 탐색 범위다. 포트 계산이 끝난
+        # 뒤에만 계산 가능하다(region()이 포트 좌표를 받는다).
         #
         # _resolve_box_overlaps가 반복적으로 region()을 계산(및 격자 스냅, 아래 참고)하며
         # 박스가 제3자 큐빗을 관통하거나 다른 박스(공유 큐빗 없는)와 겹치면 관련 큐빗을
         # 밀어 해소한다(위 함수 docstring 참고 — 01_mainref의 _eliminate_overlaps/
-        # _coupler_refinement를 다시 들여온 것). 큐빗이 움직이면 qubits/port_assignment
-        # 둘 다 바뀔 수 있으므로 반환값으로 교체한다. 남은 박스-큐빗 위반은(반복 한도 소진
-        # 또는 진전 없음) region()의 가용 면적 계산에 "막힌 면적"으로 계속 잡혀 박스가
-        # 그만큼 커지는 기존 폴백으로 흡수된다 — 박스-박스 잔존 위반은 그런 폴백이 없다
-        # (GP 경합으로 이어질 수 있음, 로그로 남는다). 억지로 0으로 만들지 않는다.
+        # _coupler_refinement를 다시 들여온 것). 큐빗이 움직이면 qubits/ports 둘 다 바뀔
+        # 수 있으므로 반환값으로 교체한다. 남은 박스-큐빗 위반은(반복 한도 소진 또는 진전
+        # 없음) region()의 가용 면적 계산에 "막힌 면적"으로 계속 잡혀 박스가 그만큼 커지는
+        # 기존 폴백으로 흡수된다 — 박스-박스 잔존 위반은 그런 폴백이 없다(GP 경합으로
+        # 이어질 수 있음, 로그로 남는다). 억지로 0으로 만들지 않는다.
         #
         # region()이 돌려주는 연속좌표 박스는 그대로 저장하지 않고 segment_size_um 격자에
         # 바깥쪽으로 스냅한다(_snap_box_to_grid, _resolve_box_overlaps 내부에서 수행 —
         # 위반 판정 자체를 스냅 후 좌표로 해야 하는 이유는 그 함수 docstring 참고).
-        # 스냅이 필요한 이유: region()은 면적을 required_wire_area(=l*meander_spacing_um)
-        # 근처에 거의 여유 없이 딱 맞춘다(ceil 반올림 정도 차이) — 그런데 GP는 그 안에
-        # segment_size_um 정사각형을 전역 격자에 맞춰서만 놓을 수 있어서, 박스 경계가
-        # 격자선과 어긋나 있으면 한 칸 가까이를 정렬 손실로 날린다. 2026-09-17
-        # meander_spacing_um을 120->40으로 낮춘 뒤 실측해보니(박스가 3배 작아져 원래도
-        # 여유가 빠듯했다) 이 정렬 손실 때문에 falcon 기준 커플러의 46%가 "연속 면적상으론
-        # 자리가 있는데" 실패했다 — 박스 자체를 격자에 스냅해 손실을 원천 제거했다(바깥쪽
-        # 으로만 키우므로 GP 하드 제약이 약해지는 방향이지 좁아지는 방향이 아니다: 실제
-        # 배선 여유가 늘어나는 것이지 물리적으로 잘못된 방향이 아니다).
         #
         # region()이 None을 돌려줄 수 있다(2026-09-20, 가용 면적 반복 확장이 die 밖으로
         # 나가야 하거나 반복 한도 안에 못 끝난 경우 — Coupler.region() docstring 참고).
@@ -1583,8 +1753,8 @@ class Floorplan:
         # (core/globalplacement.py의 _place_chain)가 이 커플러 하나만 실패로 세고 칩
         # 전체는 계속 진행한다.
         cell = float(self.params.segment_size_um)
-        new_qubits, port_assignment, coupler_regions = _resolve_box_overlaps(
-            state.processor_name, new_qubits, state.couplers, port_assignment,
+        new_qubits, ports, coupler_regions = _resolve_box_overlaps(
+            state.processor_name, new_qubits, state.couplers, ports,
             edges, state.chip_width, state.chip_height, min_sep, cell,
         )
         n_region_failed = sum(1 for box in coupler_regions.values() if box is None)
@@ -1598,7 +1768,7 @@ class Floorplan:
         return replace(
             state,
             qubits=new_qubits,
-            port_assignment=port_assignment,
+            ports=ports,
             coupler_regions=coupler_regions,
             embedding=emb,
             cut_edges=tuple(cut_edges),

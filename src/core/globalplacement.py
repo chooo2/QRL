@@ -57,7 +57,8 @@ import math
 import random
 from dataclasses import replace
 
-from core.state import ChipState, Coupler, Qubit, Segment, coupler_own_port_cell
+from core.floorplan import segments_cross
+from core.state import ChipState, Coupler, Qubit, Segment, coupler_own_port_cell, _port_edge_axis
 
 
 # 세그먼트를 둘 자리를 끝내 못 찾은 커플러가 하나둘 있는 건 정상적인 부분 실패로 다룬다
@@ -73,6 +74,9 @@ class GlobalPlacement:
     def __init__(self, params):
         self.params = params
         self.skipped: list[tuple[str, str]] = []
+        # 칩 이름 -> leg_ok가 실제로 후보를 걸러낸 횟수(2026-09-21 검증 보고용) — 이웃
+        # 방향 포트로 바꾼 뒤 케이스 A가 거의 사라져 leg_ok가 얼마나 덜 걸리는지 확인.
+        self.leg_ok_blocks: dict[str, int] = {}
 
     # 칩 목록을 배치한다. SegmentPlacementInfeasibleError가 난 칩(커플러 전부 실패)은
     # skipped에 (이름, 사유)로 기록하고 건너뛴다 — 한 칩 실패로 전체가 죽지 않는다.
@@ -88,10 +92,14 @@ class GlobalPlacement:
     def _place(self, state: ChipState) -> ChipState:
         cell = float(self.params.segment_size_um)
         qubit_owner = _qubit_owner_cells(state.qubits, cell, state.chip_width, state.chip_height)
+        qubit_rects = {
+            qid: (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
+            for qid, q in state.qubits.items()
+        }
         segment_occupied: set[tuple[int, int]] = set()
 
         order_strategy = getattr(self.params, "gp_coupler_order", "shortest_first")
-        order = _coupler_order(state.couplers, state.qubits, state.port_assignment, order_strategy)
+        order = _coupler_order(state.couplers, state.ports, order_strategy)
 
         # segment_occupied는 칩 하나 안에서 커플러들이 순서대로 공유하며 누적하는 상태다 —
         # 이전 커플러가 쓴 셀은 다음 커플러의 탐색에서 항상 점유된 것으로 보여야 순차 배치가
@@ -102,12 +110,14 @@ class GlobalPlacement:
         new_couplers: dict[tuple[int, int], Coupler] = {}
         failed = 0
         short = 0  # 경로는 찾았지만 k개에 못 미친 커플러(요청 2절: 실패 아니라 미달로 다룸)
+        leg_ok_blocks = 0  # leg_ok가 실제로 후보를 걸러낸 횟수(검증 보고용) — _place_chain에 누산기로 전달
         for key in order:
             coupler = state.couplers[key]
-            segs = _place_chain(coupler, state.qubits, state.port_assignment.get(key),
-                                 state.coupler_regions.get(key), cell,
-                                 state.chip_width, state.chip_height,
-                                 qubit_owner, segment_occupied)
+            segs, blocks = _place_chain(coupler, state.qubits, state.ports.get(key),
+                                         state.coupler_regions.get(key), cell,
+                                         state.chip_width, state.chip_height,
+                                         qubit_owner, segment_occupied, qubit_rects)
+            leg_ok_blocks += blocks
             if segs is None:
                 failed += 1
                 segs = []
@@ -117,10 +127,11 @@ class GlobalPlacement:
 
         n_total = len(state.couplers)
         logging.info(
-            "[GP] %s: couplers=%d placed=%d failed=%d 길이미달=%d segments=%d",
+            "[GP] %s: couplers=%d placed=%d failed=%d 길이미달=%d segments=%d leg_ok차단=%d",
             state.processor_name, n_total, n_total - failed, failed, short,
-            sum(len(c.segments) for c in new_couplers.values()),
+            sum(len(c.segments) for c in new_couplers.values()), leg_ok_blocks,
         )
+        self.leg_ok_blocks[state.processor_name] = leg_ok_blocks
 
         if n_total > 0 and failed == n_total:
             raise SegmentPlacementInfeasibleError(
@@ -180,9 +191,34 @@ def _qubit_owner_cells(
 # 그 함수 자체의 docstring 참고. 이 좁힘으로 GP의 박스 용량이 다시 줄어든다(예전 own-qubit
 # 확장이 실패율을 27.3%→2.6%로 낮췄던 것의 부분적 반대 방향) — 그만큼 실패율이 다시
 # 오를 것으로 예상되고, 실측치는 이 변경의 커밋/보고 메시지에 남긴다.
+# 선분(a,b)가 어떤 큐빗의 AABB 내부를 실제로 지나는지 — cell_xy vs qubit AABB(사각형 대
+# 사각형) 겹침과는 다른 판정이다. 포트는 큐빗 경계(변) 위의 점이고, 그 포트와 이어지는
+# 첫/마지막 인접 셀의 중심은 그 셀 자체가 어떤 큐빗과도 안 겹치도록 이미 보장돼 있는데도
+# (own-qubit 예외는 포트가 속한 셀 하나에만 적용되므로), "경계 위의 점 -> 안 겹치는 셀의
+# 중심"을 잇는 직선은 여전히 큐빗의 볼록한 내부를 스쳐 지나갈 수 있다(포트가 모서리 근처에
+#있고 다음 셀이 인접한 변 너머에 있을 때 — 실측: core/router.py가 첫/마지막 연결점을
+# 포트 좌표로 바꾼 뒤에도 6칩에서 347개 라우팅된 커플러 중 148개, leg 171건이 여전히
+# 큐빗 AABB를 지났다). 두 셀 중심 사이(중간 세그먼트끼리)는 이 문제가 없다 — 둘 다 이미
+# 어떤 큐빗과도 안 겹치는 두 인접 정사각형의 합집합 안에 직선이 갇히므로(각 셀이 큐빗과
+# 안 겹치면 합집합도 안 겹친다) 안전하다. 그래서 이 검사는 포트<->첫/마지막 인접 셀 구간
+# (아래 _place_chain의 leg_ok)에만 쓴다.
+def _segment_crosses_any_qubit(
+    a: tuple[float, float], b: tuple[float, float],
+    qubit_rects: dict[int, tuple[float, float, float, float]],
+) -> bool:
+    for x0, x1, y0, y1 in qubit_rects.values():
+        if (x0 < a[0] < x1 and y0 < a[1] < y1) or (x0 < b[0] < x1 and y0 < b[1] < y1):
+            return True
+        corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+        if any(segments_cross(a, b, corners[i], corners[(i + 1) % 4]) for i in range(4)):
+            return True
+    return False
+
+
 def _cell_blocked(
     coupler: Coupler, cell_xy: tuple[int, int], cell: float,
-    qubits: dict[int, Qubit], assignment: tuple[str, str] | None,
+    qubits: dict[int, Qubit],
+    ports: tuple[tuple[float, float], tuple[float, float]] | None,
     qubit_owner: dict[tuple[int, int], set[int]], segment_occupied: set[tuple[int, int]],
 ) -> bool:
     if cell_xy in segment_occupied:
@@ -192,7 +228,7 @@ def _cell_blocked(
         return False
     cell_aabb = (cell_xy[0] * cell, (cell_xy[0] + 1) * cell, cell_xy[1] * cell, (cell_xy[1] + 1) * cell)
     return any(
-        not coupler_own_port_cell(coupler, qid, qubits[qid], assignment, cell_aabb)
+        not coupler_own_port_cell(coupler, qid, ports, cell_aabb)
         for qid in blockers
     )
 
@@ -214,25 +250,21 @@ def _cell_blocked(
 # shortest_first/longest_first/random 세 값 다 config/params.json의 gp_coupler_order
 # 설명에 실측 비교 결과와 최종 선택 근거를 적었다(6칩 x 3전략 비교, 커밋 메시지 참고).
 def _port_distance(
-    couplers: dict[tuple[int, int], Coupler], qubits: dict[int, Qubit],
-    port_assignment: dict[tuple[int, int], tuple[str, str]], key: tuple[int, int],
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]], key: tuple[int, int],
 ) -> float:
-    c = couplers[key]
-    q1, q2 = qubits[c.q1], qubits[c.q2]
-    p1_name, p2_name = port_assignment[key]
-    p1, p2 = q1.ports[p1_name], q2.ports[p2_name]
+    p1, p2 = ports[key]
     return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
 
 
 def _coupler_order(
-    couplers: dict[tuple[int, int], Coupler], qubits: dict[int, Qubit],
-    port_assignment: dict[tuple[int, int], tuple[str, str]], strategy: str,
+    couplers: dict[tuple[int, int], Coupler],
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]], strategy: str,
 ) -> list[tuple[int, int]]:
     keys = sorted(couplers)
     if strategy == "shortest_first":
-        return sorted(keys, key=lambda k: _port_distance(couplers, qubits, port_assignment, k))
+        return sorted(keys, key=lambda k: _port_distance(ports, k))
     if strategy == "longest_first":
-        return sorted(keys, key=lambda k: _port_distance(couplers, qubits, port_assignment, k), reverse=True)
+        return sorted(keys, key=lambda k: _port_distance(ports, k), reverse=True)
     if strategy == "random":
         rng = random.Random(0)  # 고정 시드 — 매 실행 결과가 바뀌면 재현/디버깅이 불가능해진다
         shuffled = list(keys)
@@ -303,6 +335,7 @@ def _region_index_range(lo: float, hi: float, cell: float, i_max: int) -> tuple[
 def _find_chain_path(
     start: tuple[int, int], end: tuple[int, int], is_free, k: int,
     max_expansions: int = 20000,
+    leg_ok=None,
 ) -> list[tuple[int, int]] | None:
     if k <= 0:
         return None
@@ -362,6 +395,13 @@ def _find_chain_path(
             n = (cur[0] + dx, cur[1] + dy)
             if n in visited or not is_free(n):
                 continue
+            # cur가 start이거나 n이 end면(둘 다인 경우 — start-end 직행 포함) 이 걸음은
+            # RT가 실제로 포트 좌표를 잇는 leg가 된다 — leg_ok가 그 leg를 검사한다(모듈
+            # 상단 _segment_crosses_any_qubit 참고). 순수 중간 구간(둘 다 아님)은 이미
+            # 안전함이 증명돼 있어(어느 큐빗과도 안 겹치는 두 인접 셀의 합집합 안에만
+            # 있음) 검사하지 않는다.
+            if leg_ok is not None and (cur == start or n == end) and not leg_ok(cur, n):
+                continue
             d = manhattan(n, end)
             slack = (remaining - 1) - d
             if slack < 0 or slack % 2 != 0:
@@ -385,32 +425,70 @@ def _find_chain_path(
     return best_path
 
 
+# 포트가 속한 셀이 이제 항상 박스 안에 있다는 보장이 없다 — core/state.py의 Coupler.region()
+# 이 "케이스 B"(포트 쪽 축이 자기 큐빗 반대편으로 뻗어나가는 경우) 박스를 자기 큐빗
+# 몸체 앞에서 멈추도록 핀을 걸면서, 포트가 걸친 셀 자체(그 셀은 큐빗 몸체와 겹친다)가
+# 박스에서 빠질 수 있게 됐다. 그 경우 체인은 포트가 아니라 포트 바로 바깥의 빈 셀에서
+# 시작해야 하고, 그 빈 셀 <-> 포트 사이는 별도의 리드(lead)로 잇는다(RT가 실제로 그릴
+# 좌표). 이 함수가 그 "포트 -> 실제 시작 셀" 후보를 찾는다: 먼저 포트가 속한 셀을
+# 시도하고(박스가 안 핀됐으면(케이스 A) 여전히 유효 — 이 경우 아무것도 안 바뀐다), 안
+# 되면 그 큐빗의 중심에서 포트 쪽으로(=바깥쪽으로) 한 칸씩 옮겨가며 박스 안 + 가용 +
+# (포트->그 셀 중심) 직선이 어떤 큐빗도 안 지나는 셀을 찾는다. max_shift 안에 못 찾으면
+# None(이 커플러는 실패 — 억지로 더 찾지 않는다, 이 저장소의 일관된 원칙).
+def _resolve_endpoint(
+    port_pt: tuple[float, float], owner_qubit: Qubit,
+    in_box, is_free, qubit_rects: dict[int, tuple[float, float, float, float]],
+    cell: float, max_shift: int = 3,
+) -> tuple[tuple[int, int], bool] | tuple[None, bool]:
+    base = (int(math.floor(port_pt[0] / cell)), int(math.floor(port_pt[1] / cell)))
+    if in_box(base) and is_free(base):
+        return base, True  # True = 포트가 속한 셀 그대로(케이스 A와 동일한 예전 동작)
+    # 큐빗 몸체 반대 방향(바깥쪽)으로 한 칸씩 옮긴다 — 2026-09-21 이웃 방향 포트로 바뀌며
+    # 포트가 상/하 변에도 있을 수 있게 됐으므로, core/state.py의 _port_edge_axis로 축을
+    # 매번 판별한다(예전엔 포트가 항상 좌/우 변이라 x축 고정이었다).
+    axis, qubit_dir = _port_edge_axis(port_pt, owner_qubit)
+    sign = -1 if qubit_dir > 0 else 1
+    for step in range(1, max_shift + 1):
+        cand = (base[0] + sign * step, base[1]) if axis == "x" else (base[0], base[1] + sign * step)
+        if not (in_box(cand) and is_free(cand)):
+            continue
+        cand_pt = ((cand[0] + 0.5) * cell, (cand[1] + 0.5) * cell)
+        if _segment_crosses_any_qubit(port_pt, cand_pt, qubit_rects):
+            continue
+        return cand, False  # False = 포트와 별개인 셀 -- RT가 리드로 잇는다
+    return None, False
+
+
 # 커플러 하나의 세그먼트 체인을 배치한다. 박스(FP가 확정한 coupler_regions[key]) 안에서만
 # 찾는다 — 밖으로 넓히는 재시도는 없다(2단계 구조: 박스를 넓히는 건 FP의 권한이지 GP의
 # 권한이 아니다). 장애물 판정은 _cell_blocked()(자기 큐빗의 배정 포트 근처만 제외, 그
 # 밖의 자기 큐빗 몸체·제3 큐빗·다른 커플러 세그먼트는 전부 포함)로 한다 — _find_chain_path
 # 가 그 판정 하나로 "지나갈 수 있는 셀"을 정의하므로, GP가 "놓을 수 있다"고 본 경로는
 # 정의상 장애물을 피해 간다. 성공(부분 성공 포함)하면 Segment 리스트를 돌려주고
-# segment_occupied를 그 셀들만큼 갱신한다. start/end(포트 셀) 자체가 막혀 있거나 둘이
-# 아예 연결돼 있지 않으면 None — 이때 "실패"는 이 박스 하나에 국한된 사실이라, 같은
-# 박스를 먼저 차지한 다른 커플러의 세그먼트를 피해 자기 박스의 남은 자리를 쓰는 것까지는
-# 이 함수의 free-cell 판정만으로 이미 된다 — 백트래킹은 경로 탐색 내부에서만 하고,
-# 커플러 사이의 재배치는 하지 않는다(순차 배치 원칙 그대로 유지).
+# segment_occupied를 그 셀들만큼 갱신한다. start/end 자체가 막혀 있거나(또는 _resolve_endpoint가
+# 못 찾았거나) 둘이 아예 연결돼 있지 않으면 None — 이때 "실패"는 이 박스 하나에 국한된
+# 사실이라, 같은 박스를 먼저 차지한 다른 커플러의 세그먼트를 피해 자기 박스의 남은 자리를
+# 쓰는 것까지는 이 함수의 free-cell 판정만으로 이미 된다 — 백트래킹은 경로 탐색 내부에서만
+# 하고, 커플러 사이의 재배치는 하지 않는다(순차 배치 원칙 그대로 유지).
 def _place_chain(
-    coupler: Coupler, qubits: dict[int, Qubit], assignment: tuple[str, str] | None,
+    coupler: Coupler, qubits: dict[int, Qubit],
+    ports: tuple[tuple[float, float], tuple[float, float]] | None,
     box: tuple[float, float, float, float] | None,
     cell: float, chip_w: float, chip_h: float,
     qubit_owner: dict[tuple[int, int], set[int]], segment_occupied: set[tuple[int, int]],
-) -> list[Segment] | None:
+    qubit_rects: dict[int, tuple[float, float, float, float]],
+) -> tuple[list[Segment] | None, int]:
+    # 반환값의 두 번째 항목(leg_ok가 실제로 후보를 걸러낸 횟수)은 검증 보고용이다 —
+    # 2026-09-21 이웃 방향 포트 도입 후 케이스 A가 거의 사라져 이 값이 크게 줄 것으로
+    # 예상된다(GlobalPlacement._place가 칩별로 누산해 로그에 남긴다).
     k = coupler.num_segments
     if k == 0:
-        return []
-    if assignment is None or box is None:
-        return None  # FP가 포트/박스를 못 정한 커플러 — 이론상 skipped 칩에서만 나오므로 여기 안 옴
+        return [], 0
+    if ports is None or box is None:
+        return None, 0  # FP가 포트/박스를 못 정한 커플러 — 이론상 skipped 칩에서만 나오므로 여기 안 옴
 
     q1, q2 = qubits[coupler.q1], qubits[coupler.q2]
-    p1_name, p2_name = assignment
-    p1, p2 = q1.ports[p1_name], q2.ports[p2_name]
+    p1, p2 = ports
 
     x0, x1, y0, y1 = box
     i_max = _die_max_index(chip_w, cell)
@@ -418,28 +496,54 @@ def _place_chain(
     ri = _region_index_range(x0, x1, cell, i_max)
     rj = _region_index_range(y0, y1, cell, j_max)
     if ri is None or rj is None:
-        return None
+        return None, 0
     i_lo, i_hi = ri
     j_lo, j_hi = rj
-
-    # 포트가 실제로 속한 격자 셀 — region()이 두 포트를 반드시 덮도록 박스를 잡으므로
-    # (Coupler.region() 1)단계) 이 셀은 박스 안에 있는 게 정상이다.
-    start = (int(math.floor(p1[0] / cell)), int(math.floor(p1[1] / cell)))
-    end = (int(math.floor(p2[0] / cell)), int(math.floor(p2[1] / cell)))
 
     def in_box(c: tuple[int, int]) -> bool:
         return i_lo <= c[0] <= i_hi and j_lo <= c[1] <= j_hi
 
-    if not in_box(start) or not in_box(end):
-        return None
-
     def is_free(c: tuple[int, int]) -> bool:
-        return in_box(c) and not _cell_blocked(coupler, c, cell, qubits, assignment, qubit_owner, segment_occupied)
+        return in_box(c) and not _cell_blocked(coupler, c, cell, qubits, ports, qubit_owner, segment_occupied)
 
-    path = _find_chain_path(start, end, is_free, k)
+    # start/end: 포트가 속한 셀이 박스 안 + 가용이면 그대로 쓰고(케이스 A, 예전과 동일),
+    # 아니면(케이스 B — Coupler.region()이 자기 큐빗 몸체 앞에서 박스를 핀으로 멈췄음)
+    # 그 바깥의 가용한 셀로 옮긴다 — _resolve_endpoint 참고. start_is_port/end_is_port는
+    # "그 셀이 실제로 포트가 속한 셀인가"를 아래 leg_ok와 core/router.py(_route_coupler)에
+    # 전달한다: 그럴 때만(케이스 A) 그 셀의 중심 대신 포트 좌표를 대신 쓴다(그 셀 중심이
+    # 큐빗 몸체 안쪽일 수 있으므로) — 케이스 B는 그 셀 자체가 이미 어떤 큐빗과도 안 겹치므로
+    # (그래서 is_free를 통과했다) 중심 그대로 써도 안전하고, RT가 포트<->그 셀 사이에
+    # 실제 리드 세그먼트를 그린다(router.py 참고).
+    start, start_is_port = _resolve_endpoint(p1, q1, in_box, is_free, qubit_rects, cell)
+    end, end_is_port = _resolve_endpoint(p2, q2, in_box, is_free, qubit_rects, cell)
+    if start is None or end is None:
+        return None, 0
+
+    # RT(core/router.py)가 폴리라인의 첫/마지막 연결점으로 셀 중심 대신 실제 포트 좌표를
+    # 쓴다(2026-09-20, 관통 수정) — 그런데 포트(큐빗 경계 위의 점)에서 그 다음 셀 중심까지
+    # 잇는 leg는 그 셀 자체가 큐빗과 안 겹쳐도(own-qubit 예외가 없는 자리라 _cell_blocked가
+    # 이미 보장) 여전히 큐빗의 볼록한 몸체 모서리를 스칠 수 있다(모듈 상단
+    # _segment_crosses_any_qubit 참고). leg_ok로 그 leg 자체를 검사해 후보에서
+    # 제외한다 — "포트 셀이 아니면 몸체 안은 못 지나간다"를 셀 겹침뿐 아니라 포트로
+    # 이어지는 leg까지 확장한 것이다. a/b가 각각 start/end이고 *그 셀이 실제로 포트
+    # 셀일 때만*(start_is_port/end_is_port) 그 끝점을 셀 중심 대신 포트 좌표로 바꿔서
+    # 검사한다 — 케이스 B(포트와 다른 셀)는 이미 큐빗과 안 겹치는 셀이라 그 중심 자체를
+    # 써도 되고(_resolve_endpoint가 포트->그 셀 리드는 이미 검사해 뒀다), RT가 실제로
+    # 그릴 좌표와 정확히 같은 것을 검사해야 하므로.
+    blocks = [0]
+
+    def leg_ok(a: tuple[int, int], b: tuple[int, int]) -> bool:
+        a_pt = p1 if (a == start and start_is_port) else ((a[0] + 0.5) * cell, (a[1] + 0.5) * cell)
+        b_pt = p2 if (b == end and end_is_port) else ((b[0] + 0.5) * cell, (b[1] + 0.5) * cell)
+        ok = not _segment_crosses_any_qubit(a_pt, b_pt, qubit_rects)
+        if not ok:
+            blocks[0] += 1
+        return ok
+
+    path = _find_chain_path(start, end, is_free, k, leg_ok=leg_ok)
     if path is None:
-        return None
+        return None, blocks[0]
 
     segment_occupied.update(path)
     return [Segment(idx=idx, x=(i + 0.5) * cell, y=(j + 0.5) * cell)
-            for idx, (i, j) in enumerate(path)]
+            for idx, (i, j) in enumerate(path)], blocks[0]

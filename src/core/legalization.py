@@ -71,7 +71,7 @@ class Legalization:
         oob_q = _find_qubit_oob(state.qubits, chip_w, chip_h)
         qq = _find_qq_overlaps(state.qubits)
         oob_s = _find_seg_oob(state.couplers, chip_w, chip_h)
-        qc = _find_qc_overlaps(state.qubits, state.couplers, state.port_assignment)
+        qc = _find_qc_overlaps(state.qubits, state.couplers, state.ports)
         cc = _find_cc_overlaps(state.couplers)
         n_unplaced = sum(1 for c in state.couplers.values() if c.num_segments > 0 and not c.segments)
 
@@ -137,7 +137,7 @@ class Legalization:
             old_cell = _seg_cell(seg, cell)
             segment_occupied.discard(old_cell)
             new_cell = _nearest_free_cell_in_box(
-                (seg.x, seg.y), box, cell, coupler, qubits, state.port_assignment.get(key),
+                (seg.x, seg.y), box, cell, coupler, qubits, state.ports.get(key),
                 qubit_owner, segment_occupied, i_max, j_max,
             )
             if new_cell is None:
@@ -254,17 +254,17 @@ def _find_seg_oob(
 
 def _find_qc_overlaps(
     qubits: dict[int, Qubit], couplers: dict[tuple[int, int], Coupler],
-    port_assignment: dict[tuple[int, int], tuple[str, str]],
+    ports: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
 ) -> list[tuple[tuple[int, int], int, int]]:
     out = []
     for key, c in couplers.items():
-        assignment = port_assignment.get(key)
+        own_ports = ports.get(key)
         for s in c.segments:
             sbox = _segment_aabb(c, s)
             for qid, q in qubits.items():
                 if not _aabb_overlap(sbox, _qubit_aabb(q)):
                     continue
-                if coupler_own_port_cell(c, qid, q, assignment, sbox):
+                if coupler_own_port_cell(c, qid, own_ports, sbox):
                     continue
                 out.append((key, s.idx, qid))
     return sorted(out)
@@ -355,7 +355,8 @@ def _crossing_safe(
 # 검증 참고) 전수 탐색해도 비용이 무시할 수준이다.
 def _nearest_free_cell_in_box(
     cur_xy: tuple[float, float], box: tuple[float, float, float, float], cell: float,
-    coupler: Coupler, qubits: dict[int, Qubit], assignment: tuple[str, str] | None,
+    coupler: Coupler, qubits: dict[int, Qubit],
+    ports: tuple[tuple[float, float], tuple[float, float]] | None,
     qubit_owner: dict[tuple[int, int], set[int]],
     segment_occupied: set[tuple[int, int]], i_max: int, j_max: int,
 ) -> tuple[int, int] | None:
@@ -372,7 +373,7 @@ def _nearest_free_cell_in_box(
     best_cell = None
     for i in range(i0, i1 + 1):
         for j in range(j0, j1 + 1):
-            if _cell_blocked(coupler, (i, j), cell, qubits, assignment, qubit_owner, segment_occupied):
+            if _cell_blocked(coupler, (i, j), cell, qubits, ports, qubit_owner, segment_occupied):
                 continue
             d = (i - ci) ** 2 + (j - cj) ** 2
             if best_d is None or d < best_d:

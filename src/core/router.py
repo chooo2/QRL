@@ -68,7 +68,7 @@ from dataclasses import replace
 
 from core.floorplan import segments_cross
 from core.globalplacement import _coupler_order
-from core.state import ChipState, Coupler, Qubit, Segment
+from core.state import ChipState, Coupler, Segment
 
 
 class Router:
@@ -91,7 +91,7 @@ class Router:
         order_strategy = getattr(self.params, "rt_coupler_order", "shortest_first")
         # GlobalPlacement의 순서 로직을 재사용한다 — RT 커플러 사이엔 공유 상태가 없어
         # 순서 자체는 결과에 영향이 없지만, 인터페이스 일관성과 로그 순서를 위해 유지한다.
-        order = _coupler_order(state.couplers, state.qubits, state.port_assignment, order_strategy)
+        order = _coupler_order(state.couplers, state.ports, order_strategy)
 
         new_couplers: dict[tuple[int, int], Coupler] = {}
         failures: list[tuple[tuple[int, int], str]] = []
@@ -104,7 +104,7 @@ class Router:
                 new_couplers[key] = coupler
                 continue
             n_with_segments += 1
-            wp, reason = _route_coupler(coupler, state.qubits, state.port_assignment.get(key))
+            wp, reason = _route_coupler(coupler, state.ports.get(key))
             if wp is None:
                 failures.append((key, reason))
                 new_couplers[key] = coupler
@@ -133,15 +133,12 @@ class Router:
 # ---------------------------------------------------------------------------
 
 def _route_coupler(
-    coupler: Coupler, qubits: dict[int, Qubit], assignment: tuple[str, str] | None,
+    coupler: Coupler, ports: tuple[tuple[float, float], tuple[float, float]] | None,
 ) -> tuple[list[tuple[float, float]] | None, str | None]:
-    if assignment is None:
-        return None, "no_port_assignment"
+    if ports is None:
+        return None, "no_ports"
 
-    p1_name, p2_name = assignment
-    q1, q2 = qubits[coupler.q1], qubits[coupler.q2]
-    port1, port2 = q1.ports[p1_name], q2.ports[p2_name]
-
+    port1, port2 = ports
     cell = coupler.segment_size_um
     segs_sorted = sorted(coupler.segments, key=lambda s: s.idx)
 
@@ -152,18 +149,44 @@ def _route_coupler(
             # 실패다" 참고).
             return None, "chain_broken"
 
-    centers = [(s.x, s.y) for s in segs_sorted]
+    # segs_sorted[0]/[-1](idx=0, idx=k-1)은 _place_chain이 q1/q2 쪽 끝점으로 고정해서
+    # 만든 것이다(start/end, core/globalplacement.py의 _resolve_endpoint 참고) — 두 가지
+    # 경우가 있다:
+    #   (a) 그 셀이 실제로 배정 포트가 속한 셀(coupler_own_port_cell 예외가 적용되는
+    #       유일한 자리라 큐빗 몸체와 겹치는 게 허용됨)이면, 그 중심점이 큐빗 몸체
+    #       안쪽(반폭의 최대 91%까지 파고든 실측 사례, docs/20260920_segment_model_
+    #       review.md 발견 3)일 수 있다 — 이때는 그 중심점을 폴리라인 꼭짓점으로 쓰지
+    #       않고 포트 좌표(큐빗 경계 위, off_y = h/2 - pad_inset)로 대체한다(2026-09-20
+    #       수정, 실측: 6칩 261/347 라우팅된 커플러, leg 547건 관통 -> 0건).
+    #   (b) 그 셀이 포트와 다른, 자기 큐빗 밖의 빈 셀(_resolve_endpoint가 포트가 속한
+    #       셀을 못 써서 바깥으로 옮긴 경우, core/state.py Coupler.region()의 "핀" 참고)
+    #       이면 그 중심점 자체가 이미 안전하므로(어떤 큐빗과도 안 겹침) 그대로 꼭짓점으로
+    #       쓴다 — 포트<->이 셀 사이의 리드는 실제로 그려야 하는 구간이다(_resolve_endpoint
+    #       가 이미 이 leg가 어떤 큐빗도 안 지나는지 검사해 뒀다).
+    # 이 둘을 구분하는 유일한 신호는 "그 셀이 포트가 속한 셀과 같은가"다 — GP가 이
+    # 여부를 따로 넘기지 않으므로(Segment는 idx/x/y만 들고 다님, core/state.py 참고)
+    # 여기서 좌표로부터 다시 판정한다.
+    #
+    # 이 두 자리(idx=0, idx=k-1)는 각각 q1/q2에 고정돼 있어(ports가 그렇게 만든다)
+    # 예전처럼 "어느 쪽을 포트1에 붙일지" 비용을 비교해 방향을 고를 필요가 없다 — 그
+    # 비교(cost_fwd/cost_rev)는 idx=0이 항상 q1 쪽 끝점이라는 이 불변식을 놓치고 있었다
+    # (실제로 뒤집히는 경우가 있었다면 port1이 q2 쪽 끝점에 붙는 잘못된 폴리라인이
+    # 만들어졌을 것 — 실측상 한 번도 발동하지 않았다, cost_fwd 두 항이 항상 셀 대각선
+    # 이하인데 cost_rev 두 항은 커플러 전체 길이 규모라 구조적으로 항상 cost_fwd가 이긴다).
+    #
+    # 중간 세그먼트(idx=1..k-2)는 own-qubit 예외가 없는 자리라 정의상 어떤 큐빗과도
+    # 겹치지 않는다(coupler_own_port_cell은 딱 그 포트가 속한 셀 하나에만 적용된다) —
+    # 그래서 중간 세그먼트는 그대로 셀 중심을 쓴다.
+    def _is_port_cell(seg: Segment, port: tuple[float, float]) -> bool:
+        return (int(math.floor(seg.x / cell)), int(math.floor(seg.y / cell))) \
+            == (int(math.floor(port[0] / cell)), int(math.floor(port[1] / cell)))
 
-    # 체인의 두 끝(idx 순서상 처음/마지막) 중 어느 쪽을 포트1에 붙일지: 총 리드 거리
-    # (포트-끝점 직선 두 개의 합)가 더 짧은 방향을 고른다 — idx 순서 자체(=방문하는
-    # 세그먼트 집합)는 뒤집어도 그대로이므로 길이/커버리지에 영향 없이 리드만 최소화한다.
-    c0, c1 = centers[0], centers[-1]
-    cost_fwd = math.hypot(port1[0] - c0[0], port1[1] - c0[1]) + math.hypot(port2[0] - c1[0], port2[1] - c1[1])
-    cost_rev = math.hypot(port1[0] - c1[0], port1[1] - c1[1]) + math.hypot(port2[0] - c0[0], port2[1] - c0[1])
-    if cost_rev < cost_fwd:
-        centers = list(reversed(centers))
+    first, last = segs_sorted[0], segs_sorted[-1]
+    lead_in = [] if _is_port_cell(first, port1) else [(first.x, first.y)]
+    lead_out = [] if _is_port_cell(last, port2) else [(last.x, last.y)]
+    interior = [(s.x, s.y) for s in segs_sorted[1:-1]]
 
-    wp = _dedupe_close([port1, *centers, port2])
+    wp = _dedupe_close([port1, *lead_in, *interior, *lead_out, port2])
     if len(wp) < 2:
         return None, "degenerate_path"
     return wp, None
