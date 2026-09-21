@@ -339,7 +339,29 @@ class _LayoutModel:
             for i, k in enumerate(self.box_keys)
         }
 
-        return replace(state, qubits=new_qubits, couplers=new_couplers, coupler_regions=new_regions)
+        # 포트도 큐빗과 함께 옮겨야 한다 — 포트는 "그 큐빗 중심 + 고정 오프셋"이고
+        # 큐빗 크기는 α로 안 줄므로 그 오프셋은 α와 무관하다(위 seg_off1/seg_off2와 같은
+        # 논리, __init__ 주석 참고). 여기서 안 옮기면 state.ports는 압축 전 좌표로 남고
+        # compute_drc/coupler_own_port_cell(둘 다 state.ports를 직접 읽는다)이 압축된
+        # 세그먼트 위치와 어긋난 포트를 비교하게 된다 — 실측(xtree_53 커플러 (15,48) 등
+        # alpha_min<1인 5칩 전부)으로 확인: own-port 세그먼트인데 포트가 그 세그먼트
+        # 박스에서 수십~수백 um 떨어진 것처럼 보여 own-port 예외가 안 걸리고 qc_overlap
+        # 오탐이 났다 — 실제로 옮겨야 할 포트를 안 옮겨서 생긴 좌표 불일치였지, DP가 진짜
+        # 큐빗 몸체를 침범한 게 아니었다.
+        new_ports = {}
+        for key, (p1, p2) in state.ports.items():
+            q1id, q2id = key
+            old_q1, old_q2 = state.qubits[q1id], state.qubits[q2id]
+            new_q1, new_q2 = new_qubits[q1id], new_qubits[q2id]
+            new_ports[key] = (
+                (new_q1.x + (p1[0] - old_q1.x), new_q1.y + (p1[1] - old_q1.y)),
+                (new_q2.x + (p2[0] - old_q2.x), new_q2.y + (p2[1] - old_q2.y)),
+            )
+
+        return replace(
+            state, qubits=new_qubits, couplers=new_couplers,
+            coupler_regions=new_regions, ports=new_ports,
+        )
 
 
 # ---------------------------------------------------------------------------
