@@ -41,7 +41,7 @@ SAVE_LOG = False
 
 def main(params):
     """ Preprocessing """
-    stages = ("FP", "GP", "LG", "DP", "Finish")
+    stages = ("FP", "GP", "LG", "DP", "RT")
     runtimes: dict[str, dict[str, float]] = {}
 
     def run_stage(stage_name, stage, states):
@@ -95,7 +95,7 @@ def main(params):
     """ Routing """
 ### Routing, Finish단계
     rt = Router(params)
-    rt_state = run_stage("Finish", rt, dp_state)
+    rt_state = run_stage("RT", rt, dp_state)
 
 
     """ Basic Rendering """
@@ -115,36 +115,83 @@ def main(params):
 
     """ Evaluation """
     eval = Evaluation(params)
+
     eval_step = [
         ("FloorPlanning",       fp_state),
         ("GlobalPlacement",     gp_state),
         ("Legalization",        lg_state),
         ("DetailedPlacement",   dp_state),
+        ("Routing",             rt_state)
     ]
+
+    evaluation_results = {}
+
     for stage, states in eval_step:
+        evaluation_results[stage] = {}
+
         for state in states:
             metric = eval.compute(state)
-            logging.info("[Evaluation][%s][%s]", stage, state.processor_name)
-            metric.log_result()
 
-    header = ["Benchmark", *stages, "Total"]
-    widths = [max(len(header[0]), *(len(c["processor"]) for c in bench)), 8, 8, 8, 8, 8, 9]
-    print("\nRuntime by benchmark (sec)")
-    print(" | ".join(f"{column:>{width}}" for column, width in zip(header, widths)))
+            logging.info(
+                "[Evaluation][%s][%s]",
+                stage,
+                state.processor_name
+            )
+
+            evaluation_results[stage][state.processor_name] = metric
+
+
+    # Evaluation 결과 출력
+    benchmark_names = [c["processor"] for c in bench]
+
+    eval.print_evaluation_table(
+        evaluation_results,
+        benchmark_names
+    )
+    eval.save_csv(evaluation_results, benchmark_names)
+
+    print("\nRuntime by stage (sec)")
+
+    benchmark_names = [c["processor"] for c in bench]
+
+    header = ["Stage", *benchmark_names, "Total"]
+
+    stage_width = 6
+    benchmark_width = 8
+    total_width = 8
+
+    widths = [
+        stage_width,
+        *([benchmark_width] * len(benchmark_names)),
+        total_width,
+    ]
+
+    print(" | ".join(
+        f"{column:>{width}}"
+        for column, width in zip(header, widths)
+    ))
+
     print("-+-".join("-" * width for width in widths))
-    for benchmark in [c["processor"] for c in bench]:
-        benchmark_runtimes = runtimes.get(benchmark, {})
-        values = [benchmark_runtimes.get(stage) for stage in stages]
+
+    for stage in stages:
+        values = [
+            runtimes.get(benchmark, {}).get(stage)
+            for benchmark in benchmark_names
+        ]
+
         total = sum(value for value in values if value is not None)
+
         formatted = [
-            f"{value:{width}.3f}" if value is not None else f"{'-':>{width}}"
+            f"{value:{width}.3f}" if value is not None
+            else f"{'-':>{width}}"
             for value, width in zip(values, widths[1:-1])
         ]
+
         print(" | ".join([
-            f"{benchmark:>{widths[0]}}", *formatted, f"{total:{widths[-1]}.3f}"
+            f"{stage:>{stage_width}}",
+            *formatted,
+            f"{total:{total_width}.3f}",
         ]))
-
-
 
 
 

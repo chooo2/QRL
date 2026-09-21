@@ -1,5 +1,6 @@
 import math
 
+from core.router import find_crossing_legs
 from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, Segment, coupler_own_port_cell
 from func.metric import Metric
 
@@ -8,7 +9,7 @@ from func.metric import Metric
 DEFAULT_DETUNING_GHZ = 0.1
 
 
-# ─── 기하 헬퍼 ────────────────────────────────────────────────────────────
+# 기하 헬퍼
 # 큐빗의 경계 상자를 (x0, x1, y0, y1)로 반환
 def _qubit_aabb(q: Qubit) -> tuple[float, float, float, float]:
     return (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
@@ -82,53 +83,326 @@ def _active_qubit_indices(state: ChipState, active: set[int] | None) -> list[int
     return [i for i in state.qubits if active is None or i in active]
 
 
-# ─── 개별 metric 계산 ─────────────────────────────────────────────────────
-
-# QPlacer Eq.15 형태의 hotspot proportion을 계산.
-#   P_h = Σ_{i,j} (overlap_x + overlap_y) · centroid_dist · τ(Δf) / Σ_qubit area
-# 직접 커플러로 이어진 쌍(의도된 결합)은 crosstalk 대상에서 제외한다.
-# 반환: (proportion, 겹침에 관여한 큐빗 인덱스 집합)
+# 개별 metric 계산
+#
+# compute_freq_hotspot_proportion: QPlacer Eq.15(P_h)를 그대로 쓰지 않고 qubit뿐
+# 아니라 배치 완료된 coupler도 하나의 rectangular instance로 포함해 확장했다 —
+# Coupler.f(공진기 고유 주파수, core/state.py)가 이미 존재하는 물리량이라 coupler도
+# 디튜닝 crosstalk의 소스/타깃이 될 수 있기 때문이다. QPlacer 원식과의 차이: (1) 분모가
+# Σ_qubit area가 아니라 Σ_instance area(qubit+coupler), (2) 페어가 qubit-qubit뿐 아니라
+# qubit-coupler/coupler-coupler까지 포함한다. own-port 셀(그 커플러가 자기 endpoint
+# 큐빗에 붙는 지점)은 qc_overlap DRC와 같은 coupler_own_port_cell()로 제외한다.
 def compute_freq_hotspot_proportion(
     state: ChipState,
     active: set[int] | None = None,
     detuning_ghz: float = DEFAULT_DETUNING_GHZ,
 ) -> tuple[float, set[int]]:
+    """
+    QPlacer Eq.15 기반 Frequency Hotspot Proportion.
+
+    평가 대상 instance:
+      - 활성 qubit
+      - 배치가 완료된 coupler
+
+    각 coupler는 개별 segment가 아니라 하나의 instance로 취급하며,
+    Coupler.bbox()를 해당 instance의 rectangular polygon으로 사용한다.
+
+    P_h =
+        sum_{i<j} L_ij * D_ij * tau(f_i, f_j, Delta_c)
+        ------------------------------------------------
+                    sum_i A_i
+
+    Pair별 예외:
+      1. qubit-qubit:
+         직접 연결된 coupling pair는 제외.
+      2. qubit-coupler:
+         해당 qubit가 coupler의 endpoint이고,
+         해당 segment가 정상적인 own-port 영역에 해당하는 경우 제외.
+      3. coupler-coupler:
+         같은 coupler에 속한 pair는 제외.
+
+    반환:
+      (frequency hotspot proportion, hotspot에 관여한 qubit ID 집합)
+    """
+
     idxs = _active_qubit_indices(state, active)
-    if len(idxs) < 2:
+
+    # ============================================================
+    # 1. 평가 instance 생성
+    # ============================================================
+
+    instances = []
+
+    # ------------------------------------------------------------
+    # Qubit instances
+    # ------------------------------------------------------------
+
+    for i in idxs:
+        q = state.qubits[i]
+
+        instances.append({
+            "id": f"q_{i}",
+            "type": "qubit",
+            "x": q.x,
+            "y": q.y,
+            "w": q.w,
+            "h": q.h,
+            "f": q.f,
+            "qubit_id": i,
+            "coupler": None,
+        })
+
+    # ------------------------------------------------------------
+    # Coupler instances
+    #
+    # 실제 segment가 하나 이상 배치된 coupler만 평가한다.
+    # 하나의 coupler 전체를 하나의 rectangular instance로 취급한다.
+    # ------------------------------------------------------------
+
+    for coupler in state.couplers.values():
+        if not coupler.segments:
+            continue
+
+        bbox = coupler.bbox()
+
+        if bbox is None:
+            continue
+
+        x0, x1, y0, y1 = bbox
+
+        w = x1 - x0
+        h = y1 - y0
+
+        if w <= 0.0 or h <= 0.0:
+            continue
+
+        instances.append({
+            "id": f"c_{coupler.id}",
+            "type": "coupler",
+            "x": (x0 + x1) / 2.0,
+            "y": (y0 + y1) / 2.0,
+            "w": w,
+            "h": h,
+            "f": coupler.f,
+            "qubit_id": None,
+            "coupler": coupler,
+        })
+
+    if len(instances) < 2:
         return 0.0, set()
 
-    qubits = state.qubits
-    a_poly = sum(qubits[i].w * qubits[i].h for i in idxs)
+    # ============================================================
+    # 2. A_poly
+    #
+    # Qubit + Coupler instance area
+    # ============================================================
+
+    a_poly = sum(
+        inst["w"] * inst["h"]
+        for inst in instances
+    )
+
     if a_poly <= 0.0:
         return 0.0, set()
 
-    coupled = {frozenset(e) for e in state.cmap}
+    # ============================================================
+    # 3. Coupling map
+    # ============================================================
+
+    coupled = {
+        frozenset(edge)
+        for edge in state.cmap
+    }
 
     numerator = 0.0
     hotspot: set[int] = set()
-    for a in range(len(idxs)):
-        i = idxs[a]
-        qi = qubits[i]
-        for b in range(a + 1, len(idxs)):
-            j = idxs[b]
-            if frozenset((i, j)) in coupled:
+
+    # ============================================================
+    # 4. Pairwise hotspot calculation
+    # ============================================================
+
+    for a in range(len(instances)):
+        inst_i = instances[a]
+
+        for b in range(a + 1, len(instances)):
+            inst_j = instances[b]
+
+            type_i = inst_i["type"]
+            type_j = inst_j["type"]
+
+            # ----------------------------------------------------
+            # 4-1. Pair-specific exclusion
+            # ----------------------------------------------------
+
+            # ====================================================
+            # Qubit - Qubit
+            # ====================================================
+
+            if type_i == "qubit" and type_j == "qubit":
+
+                qi = inst_i["qubit_id"]
+                qj = inst_j["qubit_id"]
+
+                # 의도된 coupling은 hotspot에서 제외
+                if frozenset((qi, qj)) in coupled:
+                    continue
+
+            # ====================================================
+            # Qubit - Coupler
+            # ====================================================
+
+            elif type_i == "qubit" and type_j == "coupler":
+
+                qi = inst_i["qubit_id"]
+                coupler = inst_j["coupler"]
+
+                # endpoint qubit인지 확인
+                if qi in (coupler.q1, coupler.q2):
+
+                    own_ports = state.ports.get(
+                        (coupler.q1, coupler.q2)
+                    )
+
+                    is_own_port = False
+
+                    # 실제 segment 기준으로 own-port 영역인지 검사
+                    for seg in coupler.segments:
+
+                        sbox = _segment_aabb(
+                            coupler,
+                            seg,
+                        )
+
+                        if coupler_own_port_cell(
+                            coupler,
+                            qi,
+                            own_ports,
+                            sbox,
+                        ):
+                            is_own_port = True
+                            break
+
+                    if is_own_port:
+                        continue
+
+            # ====================================================
+            # Coupler - Qubit
+            # ====================================================
+
+            elif type_i == "coupler" and type_j == "qubit":
+
+                qj = inst_j["qubit_id"]
+                coupler = inst_i["coupler"]
+
+                # endpoint qubit인지 확인
+                if qj in (coupler.q1, coupler.q2):
+
+                    own_ports = state.ports.get(
+                        (coupler.q1, coupler.q2)
+                    )
+
+                    is_own_port = False
+
+                    # 실제 segment 기준으로 own-port 영역인지 검사
+                    for seg in coupler.segments:
+
+                        sbox = _segment_aabb(
+                            coupler,
+                            seg,
+                        )
+
+                        if coupler_own_port_cell(
+                            coupler,
+                            qj,
+                            own_ports,
+                            sbox,
+                        ):
+                            is_own_port = True
+                            break
+
+                    if is_own_port:
+                        continue
+
+            # ====================================================
+            # Coupler - Coupler
+            # ====================================================
+
+            elif type_i == "coupler" and type_j == "coupler":
+
+                coupler_i = inst_i["coupler"]
+                coupler_j = inst_j["coupler"]
+
+                # 같은 coupler 내부의 관계는 제외
+                if coupler_i is coupler_j:
+                    continue
+
+            # ----------------------------------------------------
+            # 4-2. Frequency proximity
+            # ----------------------------------------------------
+
+            if abs(inst_i["f"] - inst_j["f"]) > detuning_ghz:
                 continue
-            qj = qubits[j]
-            if abs(qi.f - qj.f) > detuning_ghz:
-                continue
-            x0i, x1i, y0i, y1i = _qubit_aabb(qi)
-            x0j, x1j, y0j, y1j = _qubit_aabb(qj)
+
+            # ----------------------------------------------------
+            # 4-3. Spatial overlap
+            # ----------------------------------------------------
+
+            x0i = inst_i["x"] - inst_i["w"] / 2.0
+            x1i = inst_i["x"] + inst_i["w"] / 2.0
+            y0i = inst_i["y"] - inst_i["h"] / 2.0
+            y1i = inst_i["y"] + inst_i["h"] / 2.0
+
+            x0j = inst_j["x"] - inst_j["w"] / 2.0
+            x1j = inst_j["x"] + inst_j["w"] / 2.0
+            y0j = inst_j["y"] - inst_j["h"] / 2.0
+            y1j = inst_j["y"] + inst_j["h"] / 2.0
+
             overlap_x = min(x1i, x1j) - max(x0i, x0j)
             overlap_y = min(y1i, y1j) - max(y0i, y0j)
+
             if overlap_x <= 0.0 or overlap_y <= 0.0:
                 continue
-            dist = math.hypot(qi.x - qj.x, qi.y - qj.y)
+
+            # ----------------------------------------------------
+            # 4-4. Centroid distance
+            # ----------------------------------------------------
+
+            dist = math.hypot(
+                inst_i["x"] - inst_j["x"],
+                inst_i["y"] - inst_j["y"],
+            )
+
+            # ----------------------------------------------------
+            # 4-5. Eq.15 numerator
+            # ----------------------------------------------------
+
             numerator += (overlap_x + overlap_y) * dist
-            hotspot.add(i)
-            hotspot.add(j)
+
+            # ----------------------------------------------------
+            # 4-6. Hotspot qubit tracking
+            # ----------------------------------------------------
+
+            if type_i == "qubit":
+                hotspot.add(inst_i["qubit_id"])
+
+            elif type_i == "coupler":
+                coupler = inst_i["coupler"]
+                hotspot.add(coupler.q1)
+                hotspot.add(coupler.q2)
+
+            if type_j == "qubit":
+                hotspot.add(inst_j["qubit_id"])
+
+            elif type_j == "coupler":
+                coupler = inst_j["coupler"]
+                hotspot.add(coupler.q1)
+                hotspot.add(coupler.q2)
+
+    # ============================================================
+    # 5. Frequency Hotspot Proportion
+    # ============================================================
 
     return numerator / a_poly, hotspot
-
 
 # 주파수 hotspot에 관여한 큐빗 수 (compute_freq_hotspot_proportion과 같은 정의를 공유)
 def compute_num_hotspot_qubits(
@@ -199,6 +473,14 @@ def compute_coupler_cross_point(state: ChipState) -> int:
     return count
 
 
+# 실제 라우팅된 배선(polyline, Coupler.waypoints)끼리 교차하는 쌍의 개수 — RT(core/
+# router.py)의 find_crossing_legs()를 그대로 감싼다(같은 지표를 두 번 구현하지 않는다).
+# RT 이전 단계(FP/GP/LG/DP)는 모든 커플러의 waypoints가 비어 있어 항상 0을 반환한다 —
+# 이는 "교차 없음 확인됨"이 아니라 "아직 라우팅 안 됨"이므로 Routing 단계에서만 의미가 있다.
+def compute_route_cross_point(state: ChipState) -> int:
+    return find_crossing_legs(state)[0]
+
+
 # DRC 4종(큐빗-큐빗/큐빗-커플러/커플러-커플러 겹침, 논리 엣지 교차)을 한 번에 계산.
 # edge_cross_point/coupler_cross_point를 이미 계산해뒀다면 넘겨서 재계산을 피할 수 있다.
 # num_unplaced_couplers: 세그먼트가 필요한데 못 놓은 커플러 수. 이 값이 0이 아니면
@@ -254,35 +536,27 @@ def compute_drc(
     }
 
 
-# TODO: fidelity 계산식 미정 (01_mainref에도 대응 지표가 없음).
-# 공식이 정해지기 전까지는 이 함수를 직접 호출하지 않도록 한다 — compute_metrics()도 호출하지 않는다.
-def compute_fidelity(_state: ChipState) -> float:
-    raise NotImplementedError("compute_fidelity: 계산식이 아직 정의되지 않았습니다 (TODO)")
+def compute_metrics(state: ChipState, active: set[int] | None = None,
+    detuning_ghz: float = DEFAULT_DETUNING_GHZ):
 
-
-# 배치된 칩 상태(ChipState)로부터 Metric 전체를 계산해 조립.
-# fidelity는 계산식 미정이라 None으로 남긴다(compute_fidelity 참고).
-def compute_metrics(
-    state: ChipState,
-    active: set[int] | None = None,
-    detuning_ghz: float = DEFAULT_DETUNING_GHZ,
-) -> Metric:
-    freq_hotspot_proportion, hotspot_qubits = compute_freq_hotspot_proportion(
-        state, active=active, detuning_ghz=detuning_ghz,
-    )
+    freq_hotspot_proportion, hotspot_qubits = compute_freq_hotspot_proportion(state, active, detuning_ghz)
     edge_cross_point = compute_edge_cross_point(state)
     coupler_cross_point = compute_coupler_cross_point(state)
-    drc = compute_drc(state, edge_cross_point=edge_cross_point, coupler_cross_point=coupler_cross_point)
+    route_cross_point = compute_route_cross_point(state)
+    drc = compute_drc(state, edge_cross_point, coupler_cross_point)
 
     return Metric(
-        freq_hotspot_proportion=freq_hotspot_proportion,
-        area_utilization=compute_area_efficiency(state),
-        edge_cross_point=edge_cross_point,
-        coupler_cross_point=coupler_cross_point,
-        num_hotspot_qubits=len(hotspot_qubits),
-        drc_qq_overlap=drc["drc_qq_overlap"],
-        drc_qc_overlap=drc["drc_qc_overlap"],
-        drc_cc_overlap=drc["drc_cc_overlap"],
-        drc_edge_cross=drc["drc_edge_cross"],
-        num_unplaced_couplers=drc["num_unplaced_couplers"],
+        freq_hotspot_proportion = freq_hotspot_proportion,
+        num_hotspot_qubits      = len(hotspot_qubits),
+        area_utilization        = compute_area_efficiency(state),
+        edge_cross_point        = edge_cross_point,
+        coupler_cross_point     = coupler_cross_point,
+        route_cross_point       = route_cross_point,
+
+        drc_qq_overlap          = drc["drc_qq_overlap"],
+        drc_qc_overlap          = drc["drc_qc_overlap"],
+        drc_cc_overlap          = drc["drc_cc_overlap"],
+        drc_edge_cross          = drc["drc_edge_cross"],
+        drc_route_cross         = route_cross_point == 0,
+        num_unplaced_couplers   = drc["num_unplaced_couplers"]
     )
