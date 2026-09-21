@@ -50,7 +50,7 @@ from dataclasses import replace
 import networkx as nx
 import numpy as np
 
-from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, qubit_port_toward
+from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, qubit_port_toward, _count_free_cells_in_box
 
 
 # strict 모드에서 비평면 그래프를 만났을 때 발생 — 단일 레이어 교차 0이 불가능함을 뜻함.
@@ -1045,6 +1045,8 @@ def _box_overlaps_qubits(
 def _find_translated_box(
     key: tuple[int, int],
     box: tuple[float, float, float, float],
+    coupler: Coupler,
+    ports: tuple[tuple[float, float], tuple[float, float]] | None,
     qubits: dict[int, Qubit],
     regions: dict[tuple[int, int], tuple[float, float, float, float] | None],
     chip_width: float,
@@ -1053,8 +1055,26 @@ def _find_translated_box(
     max_shift_cells: int = 3,
 ) -> tuple[float, float, float, float] | None:
     """
-    Coupler box의 크기는 유지한 채 위치만 이동하여
-    legal한 위치를 찾는다.
+    Coupler box의 크기는 유지한 채 위치만 이동하여 legal한 위치를 찾는다.
+
+    2026-09-21: 이동 후보마다 자기 큐빗 불변식도 함께 검사한다 — 이전엔 여기서
+    "제3자 큐빗/다른 박스와 안 겹치는가"만 봤다(_box_overlaps_qubits가 자기 q1/q2는
+    처음부터 검사 대상에서 뺀다, "겹침은 정상"이라는 전제 그대로). 그런데 그 전제는
+    region()이 만든 원래 박스에서만 참이다 — region()은 자기 큐빗 몸체를 own-port
+    셀 하나만 남기고 피하도록 핀 로직(core/state.py의 _pin_snap_axis 등)으로 이미
+    보장해 두는데, 이 함수가 박스를 옮기면 그 보장이 깨질 수 있다(실측: 세션
+    보고서의 box-own-qubit overlap 250건 중 다수가 frac=1.0, 즉 이동된 박스가 자기
+    큐빗 전체를 뒤덮었다 — xtree_53 커플러(7,24) 등에서 직접 확인). 그래서 이동
+    후보마다 아래 두 조건을 추가로 요구한다:
+      1) 자기 큐빗 몸체 침범이 own-port 셀(coupler_own_port_cell과 같은 규칙)을
+         벗어나지 않을 것 — _count_free_cells_in_box가 이 판정을 그대로 재사용한다
+         (자기/제3자 구분 없이 GP·region()과 똑같은 함수 하나로 통일).
+      2) 그 판정과 같은 호출에서 나오는 가용 셀 수가 이 커플러의 num_segments
+         이상일 것 — 이동으로 용량이 줄면(자기 큐빗을 더 덮거나 여백이 좁아지면)
+         그 후보는 버린다. (원래 박스의 가용 셀 수와 비교하는 더 엄격한 버전도
+         시도했으나 실측 결과 더 나빴다 — num_segments 하한 하나로 충분하다는 뜻.)
+    둘 다 만족하는 후보가 없으면 None을 돌려주고(호출부가 원래 박스를 그대로 쓴다),
+    있으면 원래처럼 가까운 순으로 첫 합격 후보를 쓴다.
     """
 
     candidates = []
@@ -1087,7 +1107,7 @@ def _find_translated_box(
         ):
             continue
 
-        # 다른 Qubit과 겹치면 제외
+        # 제3자 Qubit과 겹치면 제외
         if _box_overlaps_qubits(
             candidate,
             key,
@@ -1108,6 +1128,11 @@ def _find_translated_box(
                 break
 
         if conflict:
+            continue
+
+        # 자기 큐빗 불변식 + 용량 검사 (own-port 셀 제외 가용 셀 수 >= num_segments)
+        n_free, _, _ = _count_free_cells_in_box(coupler, candidate, qubits, ports, cell)
+        if n_free < coupler.num_segments:
             continue
 
         # 조건을 전부 만족하는 첫 위치
@@ -1465,6 +1490,8 @@ def _resolve_box_overlaps(
         moved_box = _find_translated_box(
             key,
             box,
+            couplers[key],
+            ports[key],
             qubits,
             fixed_regions,
             chip_width,
@@ -1473,7 +1500,13 @@ def _resolve_box_overlaps(
             max_shift_cells=3,
         )
 
-        fixed_regions[key] = moved_box
+        # 자기 큐빗 불변식/용량을 지키는 이동 후보가 하나도 없으면 이동 자체를
+        # 포기하고 원래 박스를 그대로 쓴다(None으로 이 커플러의 박스를 아예 날리지
+        # 않는다) — 원래 박스는 region()이 이미 자기 큐빗 안전 + 용량을 보장해 둔
+        # 상태라, 제3자/다른 박스와 겹치더라도(그래서 여기 들어왔다) GP의 순차 배치가
+        # 그 경합을 흡수할 여지가 남아 있다. 반면 박스를 아예 못 쓰게 만들면 그 커플러는
+        # 무조건 실패한다 — 이동 실패가 원래 박스보다 더 나쁜 결과를 만들면 안 된다.
+        fixed_regions[key] = moved_box if moved_box is not None else box
 
     regions = fixed_regions
 
