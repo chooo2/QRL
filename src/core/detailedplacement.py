@@ -143,7 +143,7 @@ class _LayoutModel:
         qubit_ids, qx, qy, qhw, qhh,
         seg_keys, seg_idx, seg_coupler_idx, sx, sy, seg_half0,
         box_keys, box_x0, box_x1, box_y0, box_y1,
-        own_mask,  # own_mask[i, j] = segment i의 커플러가 qubit j를 소유하는지
+        seg_q1_col, seg_q2_col, seg_off1, seg_off2,
         qubit_id_to_col: dict[int, int],
         coupler_key_to_box_row: dict[tuple[int, int], int],
         chip_w: float, chip_h: float,
@@ -157,7 +157,15 @@ class _LayoutModel:
         self.sx, self.sy, self.seg_half0 = sx, sy, seg_half0
         self.box_keys = box_keys
         self.box_x0, self.box_x1, self.box_y0, self.box_y1 = box_x0, box_x1, box_y0, box_y1
-        self.own_mask = own_mask
+        # 세그먼트 i가 속한 커플러의 q1/q2 열 인덱스, 그리고 그 큐빗의 배정 포트가 큐빗
+        # 중심에서 떨어진 고정 오프셋(off_x, off_y) — 큐빗 폭/높이는 α로 안 줄므로(모듈
+        # docstring) 이 오프셋은 α와 무관하다. feasible()이 각 α에서 qubit_positions(alpha)에
+        # 이 오프셋을 더해 "그 α에서의 포트 좌표"를 구해 own-qubit qc 예외(coupler_own_port_cell
+        # 과 같은 정의, core/state.py)를 판정한다 — 아래 own_mask 관련 설명 참고.
+        self.seg_q1_col = seg_q1_col
+        self.seg_q2_col = seg_q2_col
+        self.seg_off1 = seg_off1
+        self.seg_off2 = seg_off2
         self.qubit_id_to_col = qubit_id_to_col
         self.coupler_key_to_box_row = coupler_key_to_box_row
         self.chip_w, self.chip_h = chip_w, chip_h
@@ -208,15 +216,33 @@ class _LayoutModel:
         box_y0 = np.array([state.coupler_regions[k][2] for k in box_keys], dtype=float)
         box_y1 = np.array([state.coupler_regions[k][3] for k in box_keys], dtype=float)
 
-        # own_mask: 세그먼트 i의 소속 커플러가 큐빗 j를 소유하는지(자기 큐빗 예외, qc에서
-        # 제외 대상) — α와 무관하므로 한 번만 계산해 둔다.
-        n_seg, n_q = len(seg_keys), len(qubit_ids)
-        own_mask = np.zeros((n_seg, n_q), dtype=bool)
+        # own-qubit qc 예외 판정 재료: 세그먼트 i가 속한 커플러의 q1/q2 열 인덱스와, 그
+        # 큐빗의 배정 포트가 중심에서 떨어진 고정 오프셋. 예전엔 coupler.is_own_qubit(qid)
+        # 하나만으로(포트 위치 무관, 자기 큐빗이면 몸체 전체 허용) own_mask[i,j]를 정해
+        # feasible()에서 그 쌍을 qc 위반 대상에서 통째로 뺐다 — 이는 core/state.py의
+        # coupler_own_port_cell()이 2026-09-20에 이미 좁힌("자기 큐빗이면서 배정 포트가
+        # 속한 셀만") 정의와 어긋난다(그 함수의 docstring, core/globalplacement.py의
+        # _cell_blocked, func/compute.py의 compute_drc가 전부 그 좁은 정의 하나만 쓰는데
+        # 이 파일만 옛 정의를 쓰고 있었다). 그 결과 DP가 알파 압축 중 own-qubit 세그먼트가
+        # 큐빗 몸체 깊숙이 들어가도 걸러내지 못했다(실측: 6칩 전체 DP 이후 라우팅 leg
+        # 211건이 자기 큐빗을 관통 — RT의 leg_ok가 GP 시점엔 관통 0을 보장했는데 DP가
+        # 그 이후 이 느슨한 예외로 깨뜨렸다). 좁은 정의로 통일하려면 "이 세그먼트의 AABB가
+        # 그 큐빗의 배정 포트 점을 담는가"를 매 α에서 다시 판정해야 한다(포트 점도 세그먼트
+        # 좌표처럼 α에 따라 움직이므로, 아래 feasible() 참고) — 그래서 여기서는 판정
+        # 자체(own_mask)가 아니라 그 판정에 필요한 α-불변 재료(오프셋)만 만들어 둔다.
+        n_seg = len(seg_keys)
+        seg_q1_col = np.zeros(n_seg, dtype=int)
+        seg_q2_col = np.zeros(n_seg, dtype=int)
+        seg_off1 = np.zeros((n_seg, 2), dtype=float)
+        seg_off2 = np.zeros((n_seg, 2), dtype=float)
         for i, key in enumerate(seg_keys):
             coupler = state.couplers[key]
-            for j, qid in enumerate(qubit_ids):
-                if coupler.is_own_qubit(qid):
-                    own_mask[i, j] = True
+            q1_obj, q2_obj = state.qubits[coupler.q1], state.qubits[coupler.q2]
+            port1, port2 = state.ports[key]
+            seg_q1_col[i] = qubit_id_to_col[coupler.q1]
+            seg_q2_col[i] = qubit_id_to_col[coupler.q2]
+            seg_off1[i] = (port1[0] - q1_obj.x, port1[1] - q1_obj.y)
+            seg_off2[i] = (port2[0] - q2_obj.x, port2[1] - q2_obj.y)
 
         all_x0 = list(qx - qhw) + list(sx - seg_half0)
         all_x1 = list(qx + qhw) + list(sx + seg_half0)
@@ -229,7 +255,8 @@ class _LayoutModel:
             qubit_ids, qx, qy, qhw, qhh,
             seg_keys, seg_idx_list, seg_coupler_idx_arr, sx, sy, seg_half0,
             box_keys, box_x0, box_x1, box_y0, box_y1,
-            own_mask, qubit_id_to_col, coupler_key_to_box_row,
+            seg_q1_col, seg_q2_col, seg_off1, seg_off2,
+            qubit_id_to_col, coupler_key_to_box_row,
             state.chip_width, state.chip_height, cx, cy,
         )
 
@@ -285,9 +312,31 @@ class _LayoutModel:
         if _pairwise_overlap_count(qx, qy, self.qhw, self.qhh, self.qhw, self.qhh, eps=AABB_EPS_UM) > 0:
             return False, "qq"
 
-        if len(sx) and _cross_overlap_count(sx, sy, shalf, shalf, qx, qy, self.qhw, self.qhh,
-                                             self.own_mask, eps=AABB_EPS_UM) > 0:
-            return False, "qc"
+        if len(sx):
+            # own-qubit qc 예외(coupler_own_port_cell과 같은 정의, core/state.py) -- 이
+            # α에서의 포트 좌표(큐빗 중심 + α-불변 오프셋)를 세그먼트 AABB가 담을 때만
+            # 그 (세그먼트, 큐빗) 쌍을 qc 위반 대상에서 뺀다. __init__ 주석 참고. 여기는
+            # eps를 안 준다(위 qq/cc처럼 AABB_EPS_UM을 더하지 않음) — coupler_own_port_cell
+            # 자체가 점-포함 판정에 eps가 없는 엄격한 함수라, 여기서 eps만큼 더 관대하게
+            # 봐주면 "여기(DP)선 예외로 봐줬는데 나중에 compute_drc가 재검증하면 위반"이라는
+            # 모순이 생긴다(위 313번째 줄 주석과 같은 원칙, eagle 실측: DP의 α 압축이
+            # 독립적으로 스케일된 세그먼트/포트 좌표 사이에 ~1e-6um 잔차를 남겨 딱 그 정도
+            # 벌어진 경계 케이스 하나를 eps로 봐줬다가 compute_drc에서 위반으로 다시
+            # 잡혔다). eps 없이 엄격하게 재면 이분탐색이 그 경계 케이스를 스스로 위반으로
+            # 인식해 alpha_min을 그만큼 덜 압축하는 쪽으로 고른다 — 모순 자체가 생기지 않는다.
+            p1x = qx[self.seg_q1_col] + self.seg_off1[:, 0]
+            p1y = qy[self.seg_q1_col] + self.seg_off1[:, 1]
+            p2x = qx[self.seg_q2_col] + self.seg_off2[:, 0]
+            p2y = qy[self.seg_q2_col] + self.seg_off2[:, 1]
+            exempt1 = (np.abs(sx - p1x) <= shalf) & (np.abs(sy - p1y) <= shalf)
+            exempt2 = (np.abs(sx - p2x) <= shalf) & (np.abs(sy - p2y) <= shalf)
+            exclude_mask = np.zeros((len(sx), len(qx)), dtype=bool)
+            rows = np.arange(len(sx))
+            exclude_mask[rows[exempt1], self.seg_q1_col[exempt1]] = True
+            exclude_mask[rows[exempt2], self.seg_q2_col[exempt2]] = True
+            if _cross_overlap_count(sx, sy, shalf, shalf, qx, qy, self.qhw, self.qhh,
+                                     exclude_mask, eps=AABB_EPS_UM) > 0:
+                return False, "qc"
 
         if len(sx) and _pairwise_overlap_count(sx, sy, shalf, shalf, shalf, shalf,
                                                 self.seg_coupler_idx, eps=AABB_EPS_UM) > 0:
