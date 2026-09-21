@@ -1,3 +1,4 @@
+import logging
 import os
 
 import matplotlib
@@ -301,309 +302,128 @@ class Rendering:
         return -eps <= x <= chip.chip_width + eps and -eps <= y <= chip.chip_height + eps
 
 
-def rendering_qiskit_metal(dir, state):
-    pass
-
-    
-
-""" Qiskit-metal rendering reference
-
-import os
-import math
-import numpy as np
-from dataclasses import dataclass
-from typing import Dict, Tuple, List
-
-# Qt/GUI 헤드리스 오프스크린 환경 설정
-os.environ['QISKIT_METAL_HEADLESS'] = '1'
-os.environ['QT_QPA_PLATFORM'] = 'offscreen'
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from matplotlib.path import Path
-
-from qiskit_metal import designs
-from qiskit_metal.qlibrary.qubits.transmon_pocket import TransmonPocket
-from qiskit_metal.qlibrary.tlines.meandered import RouteMeander
-
-
-# ------------------------------------------------------------------------------
-# 1. 물리 계산 및 경로(Waypoints) 산출
-# ------------------------------------------------------------------------------
-def calc_half_wave_length(
-    f_ghz: float,           # 목표 공진 주파수 (GHz)
-    epsilon_r: float = 11.9 # 기판 유전율 (기본값: 사파이어/실리콘 기판)
-) -> float:
-#    공진기 주파수(GHz) 기준 반파장 물리 길이(um) 계산
-    c = 2.99792458e14  # 빛의 속도 (um/s)
-    eps_eff = (epsilon_r + 1.0) / 2.0  # 마이크로스트립 실효 유전율 근사
-    return round(c / (2.0 * (f_ghz * 1e9) * math.sqrt(eps_eff)), 2)  # λ/2 = c / (2f·√ε_eff)
-
-
-def generate_exact_meander_path(
-    p_start: Tuple[float, float],   # 경로 시작 좌표 (x, y)
-    p_end: Tuple[float, float],     # 경로 끝 좌표 (x, y)
-    target_length: float,           # 맞춰야 할 목표 전체 길이 (um)
-    orientation: str = 'horizontal',# 지그재그 진행 축: 'horizontal'(좌우 진행/상하 꺾임) or 'vertical'(상하 진행/좌우 꺾임)
-    meander_height: float = 250.0   # 한 번 꺾일 때 튀어나오는 폭(진폭) (um)
-) -> List[Tuple[float, float]]:
-    # 목표 길이에 맞춘 Meander 좌표계 산출
-    x1, y1 = p_start
-    x2, y2 = p_end
-
-    direct_dist = math.hypot(x2 - x1, y2 - y1)  # 시작-끝 직선 거리
-    extra_length = max(0.0, target_length - direct_dist)  # 지그재그로 채워야 할 남는 길이
-    num_turns = max(2, int(extra_length / (2.0 * meander_height)))  # 꺾이는 횟수 (최소 2회)
-
-    waypoints = [p_start]
-    lead_in = 150.0  # 시작/끝 지점의 직선 리드 구간 길이
-
-    if orientation == 'horizontal':
-        # 좌우로 이동하며 위/아래로 번갈아 꺾는 지그재그 경로
-        start_x, end_x = x1 + lead_in, x2 - lead_in
-        step_x = (end_x - start_x) / (num_turns + 1)
-        waypoints.append((start_x, y1))
-
-        curr_x, sign = start_x, 1.0
-        for _ in range(num_turns):
-            curr_x += step_x
-            waypoints.append((curr_x, y1 + sign * meander_height))  # sign이 매번 반전되며 위/아래로 꺾임
-            sign *= -1.0
-
-        waypoints.append((end_x, y1))
-    else:
-        # 상하로 이동하며 좌/우로 번갈아 꺾는 지그재그 경로 (horizontal과 축만 반대)
-        start_y, end_y = y1 + lead_in, y2 - lead_in
-        step_y = (end_y - start_y) / (num_turns + 1)
-        waypoints.append((x1, start_y))
-
-        curr_y, sign = start_y, 1.0
-        for _ in range(num_turns):
-            curr_y += step_y
-            waypoints.append((x1 + sign * meander_height, curr_y))
-            sign *= -1.0
-
-        waypoints.append((x1, end_y))
-
-    waypoints.append(p_end)
-    return waypoints
-
-
-# ------------------------------------------------------------------------------
-# 2. 데이터 구조
-# ------------------------------------------------------------------------------
-@dataclass
-class QubitMacro:
-    name: str            # 큐비트 식별 이름 (예: "Q0")
-    x: float             # 중심 x좌표 (um)
-    y: float             # 중심 y좌표 (um)
-    freq_ghz: float      # 큐비트 자체 주파수 (GHz, 라벨 표시용)
-    width: float = 400.0  # Pocket 가로 폭 (um)
-    height: float = 400.0 # Pocket 세로 높이 (um)
-
-    @property
-    def ports(self) -> Dict[str, Tuple[float, float]]:
-        # 큐비트 핀 포트 위치 정보
-        hw, off_y = self.width / 2.0, 180.0  # hw: 좌우 절반 폭, off_y: 상/하 포트 y축 오프셋
-        return {
-            # 큐비트 좌/우 양쪽 모서리에 상단·하단 커플링 핀 4개를 배치
-            "p_top_left":     (self.x - hw, self.y + off_y),
-            "p_bottom_left":  (self.x - hw, self.y - off_y),
-            "p_top_right":    (self.x + hw, self.y + off_y),
-            "p_bottom_right": (self.x + hw, self.y - off_y),
-        }
-
-    def draw_pure(self, ax):
-        # Pure Python 미리보기용 큐비트 시각화
-        hw, hh = self.width / 2.0, self.height / 2.0  # Pocket 절반 폭/높이
-        pad_w, pad_h, pad_gap = 200.0, 80.0, 30.0     # 커패시터 Pad 폭/높이/상하 간격
-
-        # Pocket(바깥 사각형 공동)과 상/하단 커패시터 Pad
-        ax.add_patch(patches.Rectangle((self.x - hw, self.y - hh), self.width, self.height, linewidth=1.2, edgecolor='#1f77b4', facecolor='#a6cee3', alpha=0.5, zorder=1))
-        top_y, bot_y = self.y + (pad_h + pad_gap)/2.0, self.y - (pad_h + pad_gap)/2.0
-        ax.add_patch(patches.Rectangle((self.x - pad_w/2, top_y - pad_h/2), pad_w, pad_h, edgecolor='#1f77b4', facecolor='#1f77b4', alpha=0.8, zorder=3))
-        ax.add_patch(patches.Rectangle((self.x - pad_w/2, bot_y - pad_h/2), pad_w, pad_h, edgecolor='#1f77b4', facecolor='#1f77b4', alpha=0.8, zorder=3))
-        ax.plot([self.x, self.x], [top_y - pad_h/2, bot_y + pad_h/2], color='#33a02c', linewidth=2.0, zorder=4)  # 두 Pad를 잇는 조셉슨 접합(junction) 선
-
-        # 좌우 4개 커플링 핀을 작은 사각형으로 표시 (바깥쪽을 향하도록 방향 조정)
-        for px, py in self.ports.values():
-            dx = 30 if px > self.x else -30
-            ax.add_patch(patches.Rectangle((px - (dx/2), py - 15), dx, 30, edgecolor='#1f77b4', facecolor='#1f77b4', zorder=3))
-
-        ax.text(self.x, self.y + 15, self.name, fontsize=10, fontweight='bold', ha='center', va='center', zorder=5)
-        ax.text(self.x, self.y - 15, f"{self.freq_ghz}GHz", fontsize=8, color='#023e8a', ha='center', va='center', zorder=5)
-
-
-@dataclass
-class CouplerEdge:
-    name: str             # 커플러(연결선) 식별 이름 (예: "C01")
-    q_start: str          # 시작 큐비트 이름
-    p_start: str          # 시작 큐비트의 포트 이름 (예: "p_top_right")
-    q_end: str            # 끝 큐비트 이름
-    p_end: str            # 끝 큐비트의 포트 이름
-    freq_ghz: float       # 이 커플러(공진기)의 목표 주파수 (GHz)
-    orientation: str      # 미앤더 진행 방향 ('horizontal' / 'vertical')
-    target_length_um: float = 0.0            # 계산된 목표 전체 길이 (um)
-    waypoints: List[Tuple[float, float]] = None  # 실제 경로를 구성하는 좌표 목록
-
-
-# ------------------------------------------------------------------------------
-# 3. 렌더링 엔진 (Pure Python & Qiskit Metal)
-# ------------------------------------------------------------------------------
-def render_pure_python(
-    qubits: Dict[str, QubitMacro],  # 큐비트 이름 -> QubitMacro 매핑
-    edges: List[CouplerEdge],       # 그릴 커플러(연결선) 목록
-    output_file: str                # 저장할 이미지 파일 경로
-):
-    # Matplotlib 기반 커스텀 미리보기
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    for q in qubits.values():
-        q.draw_pure(ax)
-
-    for e in edges:
-        pts = e.waypoints
-        # 꺾이는 지점(waypoint)마다 각진 모서리를 최대 30um 반경의 둥근 곡선(fillet)으로 대체
-        path_verts, path_codes = [pts[0]], [Path.MOVETO]
-        for i in range(1, len(pts) - 1):
-            p_prev, p_curr, p_next = np.array(pts[i-1]), np.array(pts[i]), np.array(pts[i+1])
-            v1, v2 = p_prev - p_curr, p_next - p_curr  # 현재 점 기준 이전/다음 방향 벡터
-            l1, l2 = np.linalg.norm(v1), np.linalg.norm(v2)
-            r = min(30.0, l1 / 2.0, l2 / 2.0)  # 인접 선분 길이를 넘지 않도록 라운드 반경 제한
-            path_verts.extend([p_curr + (v1/l1)*r, p_curr, p_curr + (v2/l2)*r])
-            path_codes.extend([Path.LINETO, Path.CURVE3, Path.CURVE3])
-        path_verts.append(pts[-1])
-        path_codes.append(Path.LINETO)
-
-        cpw_path = Path(path_verts, path_codes)
-        # CPW(코플레인 도파관)를 두 겹으로 그림: 연한 넓은 선(gap) 위에 진한 얇은 선(trace)
-        ax.add_patch(patches.PathPatch(cpw_path, fill=False, edgecolor='#a6cee3', linewidth=14.0, alpha=0.6, zorder=2))
-        ax.add_patch(patches.PathPatch(cpw_path, fill=False, edgecolor='blue', linewidth=6.0, alpha=0.8, zorder=3))
-
-        mid_x, mid_y = pts[len(pts)//2]  # 경로 중앙에 이름·길이 라벨 표시
-        ax.text(mid_x, mid_y + 40, f"{e.name}\n({e.target_length_um/1000:.2f}mm)", 
-                fontsize=8, color='darkred', fontweight='bold', ha='center', va='center',
-                bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="red", lw=0.8, alpha=0.8), zorder=6)
-
-    ax.set_aspect('equal')
-    ax.set_title("Pure Python PnR View", fontsize=12)
-    ax.set_xlabel("X Position (um)")
-    ax.set_ylabel("Y Position (um)")
-    ax.set_xlim(-400, 5000)
-    ax.set_ylim(-600, 2200)
-    plt.grid(True, linestyle='--', alpha=0.4)
-    plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    plt.close()
-
-
-def render_qiskit_metal(
-    qubits: Dict[str, QubitMacro],  # 큐비트 이름 -> QubitMacro 매핑
-    edges: List[CouplerEdge],       # 연결할 커플러(연결선) 목록
-    output_file: str                # 저장할 이미지 파일 경로
-):
-    # Qiskit Metal CAD 렌더링
-    design = designs.DesignPlanar()
-
-    # 큐비트마다 실제 CAD 컴포넌트(TransmonPocket) 배치, 4방향 커플링 핀(connection_pads) 함께 정의
-    # loc_W(-1/+1: 좌/우), loc_H(-1/+1: 하/상)로 핀이 붙는 모서리 위치를 지정
-    for q in qubits.values():
-        TransmonPocket(design, q.name, options=dict(
-            pos_x=f'{q.x}um', pos_y=f'{q.y}um',                     # 큐비트 중심 좌표
-            pocket_width=f'{q.width}um', pocket_height=f'{q.height}um', # 바깥 Pocket(공동) 크기
-            pad_width='200um', pad_height='80um', pad_gap='30um',   # 큐비트 자체 커패시터 Pad 크기/간격
-            connection_pads=dict(
-                # loc_W: 좌(-1)/우(+1), loc_H: 하(-1)/상(+1) 모서리 위치
-                # pad_width/pad_gap: 각 커플링 핀 패드의 폭/간격
-                p_top_left     = dict(loc_W=-1, loc_H=+1, pad_width='30um', pad_gap='10um'),
-                p_bottom_left  = dict(loc_W=-1, loc_H=-1, pad_width='30um', pad_gap='10um'),
-                p_top_right    = dict(loc_W=+1, loc_H=+1, pad_width='30um', pad_gap='10um'),
-                p_bottom_right = dict(loc_W=+1, loc_H=-1, pad_width='30um', pad_gap='10um'),
-            )
-        ))
-
-    # 커플러마다 두 큐비트 핀을 목표 길이(total_length)에 맞춘 미앤더 CPW 라인으로 연결
-    for e in edges:
-        RouteMeander(design, e.name, options=dict(
-            pin_inputs=dict(
-                start_pin=dict(component=e.q_start, pin=e.p_start),  # 연결 시작 큐비트/핀
-                end_pin=dict(component=e.q_end, pin=e.p_end)         # 연결 끝 큐비트/핀
-            ),
-            trace_width='10um',                    # 도선(trace) 폭
-            trace_gap='6um',                        # 도선과 그라운드 사이 간격(gap)
-            fillet='30um',                          # 꺾이는 모서리 라운드 반경
-            total_length=f'{e.target_length_um}um', # 맞춰야 할 전체 길이 (반파장 길이)
-            meander=dict(spacing='120um', asymmetry='0um'),         # 지그재그 줄 간 간격 / 좌우 비대칭 오프셋
-            lead=dict(start_straight='150um', end_straight='150um') # 시작/끝 직선 리드 구간 길이
-        ))
-
-    # Qiskit Metal이 생성한 도형 테이블들을 순회하며 하나의 그림에 렌더링
-    fig, ax = plt.subplots(figsize=(12, 6))
-    for _, table in design.qgeometry.tables.items():
-        if not table.empty:
-            table.plot(ax=ax, alpha=0.6, edgecolor='blue')
-
-    ax.set_aspect('equal')
-    ax.set_title("Qiskit Metal CAD View", fontsize=12)
-    ax.set_xlabel("X Position (mm)")
-    ax.set_ylabel("Y Position (mm)")
-    plt.grid(True, linestyle='--', alpha=0.4)
-    plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    plt.close()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ------------------------------------------------------------------------------
-# 4. 메인 실행부
-# ------------------------------------------------------------------------------
-if __name__ == "__main__":
-    # 큐비트 5개 배치 (Q0-Q1-Q2-Q3 일렬 + Q2 위에 Q4, IBM 5큐비트 유사 토폴로지)
-    qubits = {
-        "Q0": QubitMacro("Q0", x=0.0,    y=0.0,    freq_ghz=5.0),
-        "Q1": QubitMacro("Q1", x=1500.0, y=0.0,    freq_ghz=5.2),
-        "Q2": QubitMacro("Q2", x=3000.0, y=0.0,    freq_ghz=4.9),
-        "Q3": QubitMacro("Q3", x=4500.0, y=0.0,    freq_ghz=5.1),
-        "Q4": QubitMacro("Q4", x=3000.0, y=1500.0, freq_ghz=5.3)
-    }
-
-    # 커플러 정의: (이름, 시작 큐비트, 시작 포트, 끝 큐비트, 끝 포트, 공진 주파수GHz, 배치 방향)
-    raw_edges = [
-        ("C01", "Q0", "p_top_right",    "Q1", "p_top_left",     6.8, 'horizontal'),
-        ("C12", "Q1", "p_bottom_right", "Q2", "p_bottom_left",  6.5, 'horizontal'),
-        ("C23", "Q2", "p_top_right",    "Q3", "p_top_left",     7.0, 'horizontal'),
-        ("C24", "Q2", "p_top_left",     "Q4", "p_bottom_left",   6.6, 'vertical'),
-    ]
-
-    # 커플러별로 목표 반파장 길이를 계산하고, 그 길이에 맞는 미앤더 경로를 생성
-    edges = []
-    for name, q_s, p_s, q_e, p_e, f_c, orient in raw_edges:
-        L_target = calc_half_wave_length(f_c)
-        p_start_pos = qubits[q_s].ports[p_s]
-        p_end_pos = qubits[q_e].ports[p_e]
-
-        wps = generate_exact_meander_path(p_start_pos, p_end_pos, L_target, orientation=orient, meander_height=250.0)
-        edges.append(CouplerEdge(name, q_s, p_s, q_e, p_e, f_c, orient, L_target, wps))
-
-    # 두 가지 방식(순수 matplotlib 미리보기 / Qiskit Metal CAD)으로 각각 렌더링
-    render_pure_python(qubits, edges, "ibm_5q_pure_python_fixed.png")
-    render_qiskit_metal(qubits, edges, "ibm_5q_qiskit_metal_fixed.png")
-    print("렌더링 완료: ibm_5q_pure_python_fixed.png / ibm_5q_qiskit_metal_fixed.png")
-
-"""
+# TransmonPocket.connection_pads가 물리적으로 지원하는 슬롯은 이 4개(모서리, loc_W/loc_H
+# ∈ {-1,+1})뿐이다 — qiskit-metal 소스 직접 확인함(임의 경계 위치 불가, PlacementInfeasible
+# 체크 사유이기도 함, core/floorplan.py의 build_ports 참고). (loc_W, loc_H) -> 슬롯 이름.
+_QM_SLOTS: dict[tuple[int, int], str] = {
+    (-1, +1): "p_top_left",
+    (-1, -1): "p_bottom_left",
+    (+1, +1): "p_top_right",
+    (+1, -1): "p_bottom_right",
+}
+
+
+# state.ports[key]의 연속 좌표(이웃 방향, qubit_port_toward)를 그 큐빗 중심 기준
+# 4사분면 중 가장 가까운 것으로 반올림해 (loc_W, loc_H) 슬롯을 고른다 — 정확한 경계
+# 위치가 아니라 "어느 모서리에 가장 가까운가"만 필요하므로 부호만 보면 된다.
+def _nearest_qm_slot(qubit: "Qubit", port: tuple[float, float]) -> tuple[int, int]:
+    return (1 if port[0] >= qubit.x else -1, 1 if port[1] >= qubit.y else -1)
+
+
+# state(ChipState 하나)로부터 큐빗별 (loc_W,loc_H) 슬롯 배정을 계산한다. 한 큐빗의 이웃이
+# 5개 이상이면(qiskit-metal 물리 한계는 4개) 여러 이웃이 같은 슬롯으로 반올림될 수 있다 —
+# 그 경우 정렬 순서상 먼저 온 이웃이 그 슬롯을 차지하고, 나머지는 자리를 못 얻는다.
+# 반환: qubit_id -> {(loc_W,loc_H): coupler_key}, (coupler_key, qubit_id) -> slot 이름.
+def _assign_qm_slots(state: ChipState):
+    slot_of_qubit: dict[int, dict[tuple[int, int], tuple[int, int]]] = {qid: {} for qid in state.qubits}
+    slot_name_of: dict[tuple[tuple[int, int], int], str] = {}
+
+    for key in sorted(state.ports):
+        port1, port2 = state.ports[key]
+        for qid, port in ((key[0], port1), (key[1], port2)):
+            qubit = state.qubits[qid]
+            slot = _nearest_qm_slot(qubit, port)
+            taken_by = slot_of_qubit[qid].get(slot)
+            if taken_by is not None:
+                logging.warning(
+                    "[QM] %s: qubit %d의 슬롯 %s를 커플러 %s가 이미 차지 -- 커플러 %s의 "
+                    "이 쪽 핀은 근사 렌더링에서 생략(4-슬롯 근사 한계, 실제 배치는 이웃 "
+                    "방향 포트라 겹치지 않음)",
+                    state.processor_name, qid, _QM_SLOTS[slot], taken_by, key,
+                )
+                continue
+            slot_of_qubit[qid][slot] = key
+            slot_name_of[(key, qid)] = _QM_SLOTS[slot]
+
+    return slot_of_qubit, slot_name_of
+
+
+# ChipState 하나를 qiskit-metal CAD로 근사 렌더링해 {dir}/{processor_name}.png로 저장한다.
+#
+# 근사인 이유: 이 파이프라인의 실제 포트(core/state.py의 qubit_port_toward)는 큐빗 경계
+# 위의 연속한 점(이웃 방향으로의 ray-intersection)이다. qiskit-metal의 TransmonPocket은
+# connection_pads로 4개의 고정 모서리 슬롯(loc_W,loc_H ∈ {-1,+1})만 지원하고 임의 경계
+# 위치를 표현할 수 없다(소스 직접 확인, TransmonPocket6도 6슬롯이 전부 고정 위치라 근본
+# 한계는 같음) — 커스텀 QComponent를 새로 만들면 임의 위치를 표현할 수 있지만 그건 별도
+# 작업으로 남겨둔다. 그래서 여기서는 각 포트를 그 큐빗 중심 기준 가장 가까운 4-슬롯 중
+# 하나로 반올림해서만 그린다 — **이 그림의 핀 위치·배선 길이는 근사이지 실제 배치가 아니다.**
+# 큐빗 하나에 이웃이 5개 이상이면 두 이웃이 같은 슬롯으로 반올림돼 충돌할 수 있다 —
+# 그 경우 예외를 던지지 않고 경고 로그만 남기고 그 커플러의 해당 쪽 핀(과 그 커플러 전체
+# RouteMeander)을 생략한다. 실제 배치(포트/DRC/라우팅)에는 전혀 영향 없음 — 이 함수는
+# 시각적 참고용 CAD 그림만 만든다.
+#
+# main.py가 Rendering()과 같은 호출 규약(dir, list[ChipState])을 쓰므로 이 함수도 그렇게
+# 받는다.
+def rendering_qiskit_metal(dir, states):
+    os.environ.setdefault('QISKIT_METAL_HEADLESS', '1')
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+    from qiskit_metal import designs
+    from qiskit_metal.qlibrary.qubits.transmon_pocket import TransmonPocket
+    from qiskit_metal.qlibrary.tlines.meandered import RouteMeander
+
+    os.makedirs(dir, exist_ok=True)
+
+    for state in states:
+        slot_of_qubit, slot_name_of = _assign_qm_slots(state)
+        design = designs.DesignPlanar()
+
+        for qid, qubit in state.qubits.items():
+            connection_pads = {
+                _QM_SLOTS[slot]: dict(loc_W=slot[0], loc_H=slot[1], pad_width='30um', pad_gap='10um')
+                for slot in slot_of_qubit[qid]
+            }
+            TransmonPocket(design, f"Q{qid}", options=dict(
+                pos_x=f'{qubit.x}um', pos_y=f'{qubit.y}um',
+                pocket_width=f'{qubit.w}um', pocket_height=f'{qubit.h}um',
+                pad_width='200um', pad_height='80um', pad_gap='30um',
+                connection_pads=connection_pads,
+            ))
+
+        for key, coupler in state.couplers.items():
+            pin1 = slot_name_of.get((key, key[0]))
+            pin2 = slot_name_of.get((key, key[1]))
+            if pin1 is None or pin2 is None:
+                logging.warning(
+                    "[QM] %s: coupler %s 근사 렌더링 생략(슬롯 충돌로 한쪽 핀이 없음)",
+                    state.processor_name, key,
+                )
+                continue
+            try:
+                RouteMeander(design, f"C{key[0]}_{key[1]}", options=dict(
+                    pin_inputs=dict(
+                        start_pin=dict(component=f"Q{key[0]}", pin=pin1),
+                        end_pin=dict(component=f"Q{key[1]}", pin=pin2),
+                    ),
+                    trace_width='10um',
+                    trace_gap='6um',
+                    fillet='30um',
+                    total_length=f'{coupler.l}um',
+                    meander=dict(spacing='120um', asymmetry='0um'),
+                    lead=dict(start_straight='150um', end_straight='150um'),
+                ))
+            except Exception as e:
+                logging.warning(
+                    "[QM] %s: coupler %s RouteMeander 실패(%s) -- 이 커플러만 생략",
+                    state.processor_name, key, e,
+                )
+
+        fig, ax = plt.subplots(figsize=(12, 12))
+        for _, table in design.qgeometry.tables.items():
+            if not table.empty:
+                table.plot(ax=ax, alpha=0.6, edgecolor='blue')
+        ax.set_aspect('equal')
+        ax.set_title(f"{state.processor_name} | Qiskit-Metal CAD (4-slot approx.)")
+        plt.grid(True, linestyle='--', alpha=0.4)
+        plt.savefig(os.path.join(dir, f"{state.processor_name}.png"), dpi=200, bbox_inches='tight')
+        plt.close(fig)
