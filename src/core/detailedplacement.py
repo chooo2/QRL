@@ -116,7 +116,11 @@ class DetailedPlacement:
                 f"{crossings_after}로 변했습니다 — 수학적으로 불가능해야 하는 일이라 내부 버그입니다."
             )
 
-        new_state = model.apply(state, alpha_min)
+        fabrication_margin = (
+            float(getattr(self.params, "cpw_trace_width_um", 10.0)) / 2.0
+            + float(getattr(self.params, "cpw_trace_gap_um", 6.0))
+        )
+        new_state = model.apply(state, alpha_min, fabrication_margin)
         area_after = model.bbox_area(alpha_min)
         dt = time.perf_counter() - t0
 
@@ -360,7 +364,9 @@ class _LayoutModel:
 
         return True, None
 
-    def apply(self, state: ChipState, alpha: float) -> ChipState:
+    def apply(
+        self, state: ChipState, alpha: float, fabrication_margin_um: float = 0.0,
+    ) -> ChipState:
         qx, qy = self.qubit_positions(alpha)
         new_qubits = dict(state.qubits)
         for i, qid in enumerate(self.qubit_ids):
@@ -405,6 +411,27 @@ class _LayoutModel:
             new_ports[key] = (
                 (new_q1.x + (p1[0] - old_q1.x), new_q1.y + (p1[1] - old_q1.y)),
                 (new_q2.x + (p2[0] - old_q2.x), new_q2.y + (p2[1] - old_q2.y)),
+            )
+
+        # DP는 큐빗 크기를 줄이지 않고 region만 α배로 줄인다. 그래서 새 port가 축소된
+        # region 밖으로 밀려날 수 있다. RT/Fabrication 단계는 port에서 실제로 출발하므로,
+        # DP 이후 region은 새 port와 CPW clearance까지 다시 포함해야 한다.
+        margin = max(0.0, fabrication_margin_um)
+        for key, ports in new_ports.items():
+            region = new_regions.get(key)
+            if region is None:
+                continue
+            x0, x1, y0, y1 = region
+            for px, py in ports:
+                x0 = min(x0, px - margin)
+                x1 = max(x1, px + margin)
+                y0 = min(y0, py - margin)
+                y1 = max(y1, py + margin)
+            new_regions[key] = (
+                max(0.0, x0),
+                min(state.chip_width, x1),
+                max(0.0, y0),
+                min(state.chip_height, y1),
             )
 
         return replace(

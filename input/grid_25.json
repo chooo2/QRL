@@ -2,10 +2,10 @@
   "processor": "grid_25",
   "num_qubits": 25,
   "topology": "grid",
-  "chip_width_um": 7800,
-  "chip_height_um": 7800,
+  "chip_width_um": 15000,
+  "chip_height_um": 15000,
   "_provenance": {
-    "chip_width_um": "01_mainref/bak/input2/grid/grid_25.json (chip_length_um=7800.0, pre-2026-09-14 snapshot). Matches 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['grid'][25.0]=7800.0 exactly -- the one chip of the 6 where the old snapshot still agrees with mainref's later die-anchor resize research (2026-09-14/15, 'Part N'). No update needed."
+    "chip_width_um": "Reduced from the temporary 25000um setting to 15000um. The older 7800um anchor does not pass this repository's current FP coupler-box resolution step (grid_25 fails with unresolved box-qubit overlaps), while 15000um is the first coarse candidate in the 12000/15000um bracket that passes FP."
   },
   "coupling_graph": [
     [0, 1],

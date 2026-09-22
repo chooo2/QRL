@@ -66,6 +66,8 @@ import logging
 import math
 from dataclasses import replace
 
+from shapely.geometry import LineString, box
+
 from core.floorplan import segments_cross
 from core.globalplacement import _coupler_order
 from core.state import ChipState, Coupler, Segment
@@ -88,6 +90,9 @@ class Router:
         return out
 
     def _route(self, state: ChipState) -> ChipState:
+        if _use_grid_compact_router(state, self.params):
+            return self._route_grid_compact(state)
+
         order_strategy = getattr(self.params, "rt_coupler_order", "shortest_first")
         # GlobalPlacement의 순서 로직을 재사용한다 — RT 커플러 사이엔 공유 상태가 없어
         # 순서 자체는 결과에 영향이 없지만, 인터페이스 일관성과 로그 순서를 위해 유지한다.
@@ -96,6 +101,15 @@ class Router:
         new_couplers: dict[tuple[int, int], Coupler] = {}
         failures: list[tuple[tuple[int, int], str]] = []
         n_with_segments = 0
+        qubit_rects = {
+            qid: (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
+            for qid, q in state.qubits.items()
+        }
+        cpw_half_cut = (
+            float(getattr(self.params, "cpw_trace_width_um", 10.0)) / 2.0
+            + float(getattr(self.params, "cpw_trace_gap_um", 6.0))
+        )
+        min_cpw_spacing = float(getattr(self.params, "cpw_min_coupler_spacing_um", 200.0))
         for key in order:
             coupler = state.couplers[key]
             if not coupler.segments:
@@ -109,6 +123,15 @@ class Router:
                 failures.append((key, reason))
                 new_couplers[key] = coupler
             else:
+                wp = _simplify_to_target_length(
+                    wp, coupler.l, qubit_rects, state.coupler_regions.get(key),
+                    cpw_half_cut, min_cpw_spacing,
+                )
+                length_err = abs((_polyline_length(wp) - coupler.l) / coupler.l)
+                if length_err > 0.05:
+                    failures.append((key, "length_out_of_5pct"))
+                    new_couplers[key] = replace(coupler, waypoints=[])
+                    continue
                 new_couplers[key] = replace(coupler, waypoints=wp)
 
         if failures:
@@ -127,10 +150,208 @@ class Router:
 
         return replace(state, couplers=new_couplers)
 
+    def _route_grid_compact(self, state: ChipState) -> ChipState:
+        order = _coupler_order(state.couplers, state.ports, "shortest_first")
+        half_cut = (
+            float(getattr(self.params, "cpw_trace_width_um", 10.0)) / 2.0
+            + float(getattr(self.params, "cpw_trace_gap_um", 6.0))
+        )
+        min_spacing = float(getattr(self.params, "grid_compact_route_spacing_um", 80.0))
+        qubit_rects = {
+            qid: box(q.x - q.w / 2.0, q.y - q.h / 2.0, q.x + q.w / 2.0, q.y + q.h / 2.0)
+            for qid, q in state.qubits.items()
+        }
+        accepted: list[tuple[tuple[int, int], object]] = []
+        new_couplers: dict[tuple[int, int], Coupler] = {}
+        failures: list[tuple[tuple[int, int], str]] = []
+
+        for key in order:
+            coupler = state.couplers[key]
+            ports = state.ports.get(key)
+            if ports is None:
+                failures.append((key, "no_ports"))
+                new_couplers[key] = replace(coupler, waypoints=[])
+                continue
+            wp = _grid_compact_route_candidate(
+                key, ports, coupler.l, state.chip_width, state.chip_height,
+                qubit_rects, accepted, half_cut, min_spacing,
+            )
+            if wp is None:
+                failures.append((key, "compact_route_not_found"))
+                new_couplers[key] = replace(coupler, waypoints=[])
+                continue
+            accepted.append((key, LineString(wp).buffer(half_cut, cap_style=2, join_style=2)))
+            new_couplers[key] = replace(coupler, waypoints=wp, segments=[])
+
+        if failures:
+            self.route_failures[state.processor_name] = failures
+
+        logging.info(
+            "[RT][compact] %s: couplers=%d 라우팅성공=%d 실패=%d",
+            state.processor_name, len(state.couplers), len(state.couplers) - len(failures),
+            len(failures),
+        )
+        if failures:
+            by_reason: dict[str, int] = {}
+            for _key, reason in failures:
+                by_reason[reason] = by_reason.get(reason, 0) + 1
+            logging.info("[RT][compact] %s: 실패 사유별 건수 %s", state.processor_name, by_reason)
+
+        return replace(state, couplers=new_couplers)
+
 
 # ---------------------------------------------------------------------------
 # 커플러 하나 라우팅 — 세그먼트 체인을 idx 순서로 그냥 잇는다. 접지 않는다.
 # ---------------------------------------------------------------------------
+
+def _use_grid_compact_router(state: ChipState, params) -> bool:
+    return (
+        state.processor_name == "grid_25"
+        and bool(getattr(params, "grid_compact_mode_enabled", False))
+    )
+
+
+def _grid_compact_route_candidate(
+    key: tuple[int, int],
+    ports: tuple[tuple[float, float], tuple[float, float]],
+    target_length: float,
+    chip_w: float,
+    chip_h: float,
+    qubit_rects,
+    accepted,
+    half_cut_um: float,
+    min_spacing_um: float,
+) -> list[tuple[float, float]] | None:
+    p1, p2 = ports
+    dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+    horizontal = abs(dx) >= abs(dy)
+    best = None
+
+    for side in (-1.0, 1.0):
+        for n_teeth in range(1, 10):
+            for amp in (1600.0, 1400.0, 1200.0, 1000.0, 800.0, 600.0, 400.0, 250.0):
+                wp = (
+                    _horizontal_serpentine(p1, p2, side, n_teeth, amp)
+                    if horizontal else
+                    _vertical_serpentine(p1, p2, side, n_teeth, amp)
+                )
+                wp = _dedupe_close(wp)
+                if len(wp) < 2:
+                    continue
+                length = _polyline_length(wp)
+                err = abs(length - target_length) / target_length
+                if err > 0.05:
+                    continue
+                reason = _compact_route_violation(
+                    key, wp, chip_w, chip_h, qubit_rects, accepted,
+                    half_cut_um, min_spacing_um,
+                )
+                if reason is not None:
+                    continue
+                turns = max(0, len(wp) - 2)
+                score = (err, turns, amp)
+                if best is None or score < best[0]:
+                    best = (score, wp)
+    if best is not None:
+        return best[1]
+    return None
+
+
+def _horizontal_serpentine(
+    p1: tuple[float, float], p2: tuple[float, float], side: float,
+    n_teeth: int, amp: float,
+) -> list[tuple[float, float]]:
+    reverse = p2[0] < p1[0]
+    a, b = (p2, p1) if reverse else (p1, p2)
+    x0, y0 = a
+    x1, y1 = b
+    span = max(abs(x1 - x0), 1.0)
+    base_y = (y0 + y1) / 2.0
+    out = [a, (x0, base_y)]
+    tooth_w = span / (n_teeth * 2.0 + 1.0)
+    x = x0 + tooth_w
+    for _ in range(n_teeth):
+        out.extend([
+            (x, base_y),
+            (x, base_y + side * amp),
+            (x + tooth_w, base_y + side * amp),
+            (x + tooth_w, base_y),
+        ])
+        x += 2.0 * tooth_w
+    out.extend([(x1, base_y), b])
+    return list(reversed(out)) if reverse else out
+
+
+def _vertical_serpentine(
+    p1: tuple[float, float], p2: tuple[float, float], side: float,
+    n_teeth: int, amp: float,
+) -> list[tuple[float, float]]:
+    reverse = p2[1] < p1[1]
+    a, b = (p2, p1) if reverse else (p1, p2)
+    x0, y0 = a
+    x1, y1 = b
+    span = max(abs(y1 - y0), 1.0)
+    base_x = (x0 + x1) / 2.0
+    out = [a, (base_x, y0)]
+    tooth_h = span / (n_teeth * 2.0 + 1.0)
+    y = y0 + tooth_h
+    for _ in range(n_teeth):
+        out.extend([
+            (base_x, y),
+            (base_x + side * amp, y),
+            (base_x + side * amp, y + tooth_h),
+            (base_x, y + tooth_h),
+        ])
+        y += 2.0 * tooth_h
+    out.extend([(base_x, y1), b])
+    return list(reversed(out)) if reverse else out
+
+
+def _compact_route_violation(
+    key: tuple[int, int],
+    wp: list[tuple[float, float]],
+    chip_w: float,
+    chip_h: float,
+    qubit_rects,
+    accepted,
+    half_cut_um: float,
+    min_spacing_um: float,
+) -> str | None:
+    if any(x < 0.0 or x > chip_w or y < 0.0 or y > chip_h for x, y in wp):
+        return "die_escape"
+    line = LineString(wp)
+    if line.length <= 1e-6:
+        return "degenerate"
+    cut = line.buffer(half_cut_um, cap_style=2, join_style=2)
+    die = box(0.0, 0.0, chip_w, chip_h)
+    if cut.difference(die).area > 1e-6:
+        return "die_escape"
+
+    own_qubits = set(key)
+    for qid, qrect in qubit_rects.items():
+        overlap = cut.intersection(qrect)
+        if overlap.area <= 1e-6:
+            continue
+        if qid in own_qubits:
+            continue
+        return f"qc_overlap:{qid}"
+
+    for other_key, other_cut in accepted:
+        shared = own_qubits & set(other_key)
+        test_cut = cut
+        test_other = other_cut
+        if shared:
+            shared_rects = [qubit_rects[qid] for qid in shared if qid in qubit_rects]
+            if shared_rects:
+                for rect in shared_rects:
+                    test_cut = test_cut.difference(rect)
+                    test_other = test_other.difference(rect)
+        if test_cut.intersection(test_other).area > 1e-6:
+            return f"cc_overlap:{other_key}"
+        if min_spacing_um > 0.0 and test_cut.distance(test_other) + 1e-6 < min_spacing_um:
+            return f"cc_spacing:{other_key}"
+    return None
+
 
 def _route_coupler(
     coupler: Coupler, ports: tuple[tuple[float, float], tuple[float, float]] | None,
@@ -190,6 +411,174 @@ def _route_coupler(
     if len(wp) < 2:
         return None, "degenerate_path"
     return wp, None
+
+
+def _simplify_to_target_length(
+    waypoints: list[tuple[float, float]],
+    target_length: float,
+    qubit_rects: dict[int, tuple[float, float, float, float]],
+    region: tuple[float, float, float, float] | None,
+    cpw_half_cut_um: float,
+    min_cpw_spacing_um: float,
+) -> list[tuple[float, float]]:
+    if len(waypoints) <= 2:
+        return waypoints
+
+    best = list(waypoints)
+    improved = True
+    while improved:
+        improved = False
+        cur_len = _polyline_length(best)
+        min_allowed_len = target_length * 0.95
+        best_candidate = None
+        for i in range(1, len(best) - 1):
+            prev_pt = best[i - 1]
+            next_pt = best[i + 1]
+            if _segment_crosses_any_qubit_rect(prev_pt, next_pt, qubit_rects):
+                continue
+            if region is not None and not _segment_inside_rect(prev_pt, next_pt, region):
+                continue
+            cand = best[:i] + best[i + 1:]
+            cand_len = _polyline_length(cand)
+            if cand_len < min_allowed_len:
+                continue
+            length_better = (
+                abs(cand_len - target_length)
+                < abs(cur_len - target_length) - 1e-6
+            )
+            if not length_better:
+                continue
+            score = (
+                abs(cand_len - target_length),
+                i,
+                cand,
+                cand_len,
+            )
+            if best_candidate is None or score < best_candidate:
+                best_candidate = score
+        if best_candidate is not None:
+            _err, _i, best, _cand_len = best_candidate
+            improved = True
+
+    best = _repair_self_spacing_without_length_regression(
+        best, target_length, qubit_rects, region, cpw_half_cut_um, min_cpw_spacing_um
+    )
+    return best
+
+
+def _repair_self_spacing_without_length_regression(
+    waypoints: list[tuple[float, float]],
+    target_length: float,
+    qubit_rects: dict[int, tuple[float, float, float, float]],
+    region: tuple[float, float, float, float] | None,
+    cpw_half_cut_um: float,
+    min_cpw_spacing_um: float,
+) -> list[tuple[float, float]]:
+    best = list(waypoints)
+    if len(best) <= 2:
+        return best
+
+    min_allowed_len = target_length * 0.95
+    max_allowed_len = target_length * 1.05
+    if not (min_allowed_len <= _polyline_length(best) <= max_allowed_len):
+        return best
+
+    improved = True
+    while improved:
+        improved = False
+        cur_len = _polyline_length(best)
+        cur_len_err = abs(cur_len - target_length)
+        cur_spacing_score = _self_spacing_score(
+            best, cpw_half_cut_um, min_cpw_spacing_um
+        )
+        if cur_spacing_score[0] == 0:
+            break
+        best_candidate = None
+        for i in range(1, len(best) - 1):
+            prev_pt = best[i - 1]
+            next_pt = best[i + 1]
+            if _segment_crosses_any_qubit_rect(prev_pt, next_pt, qubit_rects):
+                continue
+            if region is not None and not _segment_inside_rect(prev_pt, next_pt, region):
+                continue
+            cand = best[:i] + best[i + 1:]
+            cand_len = _polyline_length(cand)
+            if cand_len < min_allowed_len or cand_len > max_allowed_len:
+                continue
+            cand_len_err = abs(cand_len - target_length)
+            cand_spacing_score = _self_spacing_score(
+                cand, cpw_half_cut_um, min_cpw_spacing_um
+            )
+            if cand_spacing_score >= cur_spacing_score:
+                continue
+            score = (cand_spacing_score, cand_len_err, i, cand)
+            if best_candidate is None or score < best_candidate:
+                best_candidate = score
+        if best_candidate is not None:
+            _spacing_score, _len_err, _i, best = best_candidate
+            improved = True
+    return best
+
+
+def _self_spacing_score(
+    points: list[tuple[float, float]], half_width_um: float, min_spacing_um: float,
+) -> tuple[int, float]:
+    legs = []
+    for p0, p1 in zip(points, points[1:]):
+        if math.hypot(p1[0] - p0[0], p1[1] - p0[1]) <= 1e-6:
+            continue
+        legs.append(LineString([p0, p1]).buffer(half_width_um, cap_style=2, join_style=2))
+
+    violations = 0
+    worst_deficit = 0.0
+    for i, leg_a in enumerate(legs):
+        for j in range(i + 2, len(legs)):
+            if i == 0 and j == len(legs) - 1:
+                continue
+            leg_b = legs[j]
+            overlap = leg_a.intersection(leg_b)
+            spacing = 0.0 if overlap.area > 1e-6 else leg_a.distance(leg_b)
+            deficit = max(0.0, min_spacing_um - spacing)
+            if deficit > 1e-6:
+                violations += 1
+                worst_deficit = max(worst_deficit, deficit)
+    return (violations, round(worst_deficit, 6))
+
+
+def _segment_inside_rect(
+    a: tuple[float, float], b: tuple[float, float],
+    rect: tuple[float, float, float, float],
+    eps: float = 1e-6,
+) -> bool:
+    x0, x1, y0, y1 = rect
+    return (
+        min(a[0], b[0]) >= x0 - eps
+        and max(a[0], b[0]) <= x1 + eps
+        and min(a[1], b[1]) >= y0 - eps
+        and max(a[1], b[1]) <= y1 + eps
+    )
+
+
+def _segment_crosses_qubit_rect(
+    a: tuple[float, float], b: tuple[float, float],
+    rect: tuple[float, float, float, float],
+) -> bool:
+    x0, x1, y0, y1 = rect
+    minx, maxx = min(a[0], b[0]), max(a[0], b[0])
+    miny, maxy = min(a[1], b[1]), max(a[1], b[1])
+    if maxx < x0 or x1 < minx or maxy < y0 or y1 < miny:
+        return False
+    if (x0 < a[0] < x1 and y0 < a[1] < y1) or (x0 < b[0] < x1 and y0 < b[1] < y1):
+        return True
+    corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+    return any(segments_cross(a, b, corners[i], corners[(i + 1) % 4]) for i in range(4))
+
+
+def _segment_crosses_any_qubit_rect(
+    a: tuple[float, float], b: tuple[float, float],
+    qubit_rects: dict[int, tuple[float, float, float, float]],
+) -> bool:
+    return any(_segment_crosses_qubit_rect(a, b, rect) for rect in qubit_rects.values())
 
 
 # 두 세그먼트가 전역 격자상 정확히 한 칸(segment_size_um) 이웃인지 — 대각선/2칸 이상

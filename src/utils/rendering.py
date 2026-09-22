@@ -1,11 +1,14 @@
 import logging
 import os
+import csv
 
 import matplotlib
 matplotlib.use('Agg')  # headless — main.py는 디스플레이 없는 환경(서버)에서도 돌아가야 한다
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.colors import hsv_to_rgb, to_rgba
+from shapely.geometry import box
+from shapely.ops import unary_union
 
 from core.router import find_crossing_legs
 from core.state import ChipState
@@ -91,12 +94,11 @@ class Rendering:
         if chip.fallback_used:
             title += " | fallback"
         ax.set_title(title, fontsize=10)
-        # ax.set_xlabel("x (µm)")
-        # ax.set_ylabel("y (µm)")
-        # ax.grid(True, linestyle="--", linewidth=0.4, alpha=0.3)
+        ax.set_xlabel("x (um)")
+        ax.set_ylabel("y (um)")
+        ax.grid(True, linestyle="--", linewidth=0.4, alpha=0.3)
         ax.margins(0.04)
         ax.set_aspect("equal", adjustable="box")
-        ax.set_axis_off()
 
         # self._draw_legend(ax, has_segments, has_boxes, has_bbox)
 
@@ -348,19 +350,12 @@ def _assign_qm_slots(state: ChipState):
     return slot_of_qubit, slot_name_of
 
 
-# ChipState 하나를 qiskit-metal CAD로 근사 렌더링해 {dir}/{processor_name}.png로 저장한다.
+# ChipState 하나를 qiskit-metal CAD로 렌더링해 {dir}/{processor_name}.png로 저장한다.
 #
-# 근사인 이유: 이 파이프라인의 실제 포트(core/state.py의 qubit_port_toward)는 큐빗 경계
-# 위의 연속한 점(이웃 방향으로의 ray-intersection)이다. qiskit-metal의 TransmonPocket은
-# connection_pads로 4개의 고정 모서리 슬롯(loc_W,loc_H ∈ {-1,+1})만 지원하고 임의 경계
-# 위치를 표현할 수 없다(소스 직접 확인, TransmonPocket6도 6슬롯이 전부 고정 위치라 근본
-# 한계는 같음) — 커스텀 QComponent를 새로 만들면 임의 위치를 표현할 수 있지만 그건 별도
-# 작업으로 남겨둔다. 그래서 여기서는 각 포트를 그 큐빗 중심 기준 가장 가까운 4-슬롯 중
-# 하나로 반올림해서만 그린다 — **이 그림의 핀 위치·배선 길이는 근사이지 실제 배치가 아니다.**
-# 큐빗 하나에 이웃이 5개 이상이면 두 이웃이 같은 슬롯으로 반올림돼 충돌할 수 있다 —
-# 그 경우 예외를 던지지 않고 경고 로그만 남기고 그 커플러의 해당 쪽 핀(과 그 커플러 전체
-# RouteMeander)을 생략한다. 실제 배치(포트/DRC/라우팅)에는 전혀 영향 없음 — 이 함수는
-# 시각적 참고용 CAD 그림만 만든다.
+# TransmonPocket의 connection_pads는 4개 고정 슬롯만 지원하므로 큐빗 패드 위치는 여전히
+# 가까운 슬롯으로 근사한다. 하지만 커플러 경로는 RouteMeander로 재합성하지 않고 RT가 확정한
+# Coupler.waypoints를 qiskit-metal qgeometry.path에 직접 넣는다. 따라서 4_RT의 라우팅
+# 꺾은선과 이 CAD 그림의 커플러 경로는 같은 데이터를 기준으로 한다.
 #
 # main.py가 Rendering()과 같은 호출 규약(dir, list[ChipState])을 쓰므로 이 함수도 그렇게
 # 받는다.
@@ -368,22 +363,53 @@ def rendering_qiskit_metal(dir, states):
     os.environ.setdefault('QISKIT_METAL_HEADLESS', '1')
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
-    from qiskit_metal import designs
-    from qiskit_metal.qlibrary.qubits.transmon_pocket import TransmonPocket
-    from qiskit_metal.qlibrary.tlines.meandered import RouteMeander
+    try:
+        from qiskit_metal import QComponent, draw
+        from qiskit_metal import designs
+        from qiskit_metal.qlibrary.qubits.transmon_pocket import TransmonPocket
+    except Exception as e:
+        logging.warning("[QM] qiskit-metal import 실패(%s) -- qiskit-metal 렌더링을 건너뜁니다.", e)
+        return
 
     os.makedirs(dir, exist_ok=True)
+
+    class RoutedCouplerPath(QComponent):
+        default_options = dict(points=[], trace_width='10um', trace_gap='6um')
+
+        def make(self):
+            pts = [
+                (self.design.parse_value(f'{x}um'), self.design.parse_value(f'{y}um'))
+                for x, y in self.options.points
+            ]
+            if len(pts) < 2:
+                return
+            line = draw.LineString(pts)
+            trace_width = self.design.parse_value(self.options.trace_width)
+            trace_gap = self.design.parse_value(self.options.trace_gap)
+            self.options._actual_length = f'{line.length} {self.design.get_units()}'
+            self.add_qgeometry('path', {'trace': line}, width=trace_width, fillet=0.0)
+            self.add_qgeometry(
+                'path', {'cut': line},
+                width=trace_width + 2.0 * trace_gap,
+                fillet=0.0,
+                subtract=True,
+            )
+
+    length_rows: list[dict[str, object]] = []
 
     for state in states:
         slot_of_qubit, slot_name_of = _assign_qm_slots(state)
         design = designs.DesignPlanar()
+        rendered_keys: list[tuple[int, int]] = []
+        missing_keys: list[tuple[int, int]] = []
+        qubit_components = {}
 
         for qid, qubit in state.qubits.items():
             connection_pads = {
                 _QM_SLOTS[slot]: dict(loc_W=slot[0], loc_H=slot[1], pad_width='30um', pad_gap='10um')
                 for slot in slot_of_qubit[qid]
             }
-            TransmonPocket(design, f"Q{qid}", options=dict(
+            qubit_components[qid] = TransmonPocket(design, f"Q{qid}", options=dict(
                 pos_x=f'{qubit.x}um', pos_y=f'{qubit.y}um',
                 pocket_width=f'{qubit.w}um', pocket_height=f'{qubit.h}um',
                 pad_width='200um', pad_height='80um', pad_gap='30um',
@@ -391,39 +417,634 @@ def rendering_qiskit_metal(dir, states):
             ))
 
         for key, coupler in state.couplers.items():
+            if not coupler.waypoints:
+                missing_keys.append(key)
+                continue
+            points = _qmetal_pin_aligned_waypoints(
+                coupler.waypoints,
+                qubit_components.get(key[0]), slot_name_of.get((key, key[0])),
+                qubit_components.get(key[1]), slot_name_of.get((key, key[1])),
+            )
+            rendered_keys.append(key)
+            RoutedCouplerPath(
+                design,
+                f"C{key[0]}_{key[1]}",
+                options=dict(points=points, trace_width='10um', trace_gap='6um'),
+            )
+
+        for key, coupler in state.couplers.items():
+            if not coupler.waypoints:
+                length_rows.append({
+                    "processor": state.processor_name,
+                    "coupler": f"{key[0]}-{key[1]}",
+                    "status": "missing_waypoints",
+                    "target_um": f"{coupler.l:.6f}",
+                    "rt_length_um": "",
+                    "qmetal_length_um": "",
+                    "err_pct": "",
+                    "qmetal_visual_err_pct": "",
+                })
+                continue
+            qmetal_length_um = _qmetal_path_length_um(design, f"C{key[0]}_{key[1]}")
+            rt_length_um = coupler.route_length
+            length_rows.append({
+                "processor": state.processor_name,
+                "coupler": f"{key[0]}-{key[1]}",
+                "status": "rendered",
+                "target_um": f"{coupler.l:.6f}",
+                "rt_length_um": f"{rt_length_um:.6f}",
+                "qmetal_length_um": "" if qmetal_length_um is None else f"{qmetal_length_um:.6f}",
+                "err_pct": f"{((rt_length_um - coupler.l) / coupler.l * 100.0):.6f}",
+                "qmetal_visual_err_pct": "" if qmetal_length_um is None else f"{((qmetal_length_um - coupler.l) / coupler.l * 100.0):.6f}",
+            })
+
+        _log_qmetal_length_summary(state, length_rows)
+        if missing_keys:
+            logging.warning(
+                "[QM] %s: RT waypoints 없는 커플러 %d/%d개 -- PNG에 빨간 점선으로 표시합니다.",
+                state.processor_name, len(missing_keys), len(state.couplers),
+            )
+
+        try:
+            fig, ax = plt.subplots(figsize=(12, 12))
+            for _, table in design.qgeometry.tables.items():
+                if not table.empty:
+                    table.plot(ax=ax, alpha=0.6, edgecolor='blue')
+            _draw_qmetal_cpw_overlay(ax, design)
+            _draw_missing_qmetal_couplers(ax, state, missing_keys)
+            ax.set_aspect('equal')
+            ax.set_title(
+                f"{state.processor_name} | Qiskit-Metal CAD "
+                f"(routed={len(rendered_keys)}, missing={len(missing_keys)}, 4-slot approx.)"
+            )
+            plt.grid(True, linestyle='--', alpha=0.4)
+            plt.savefig(os.path.join(dir, f"{state.processor_name}.png"), dpi=200, bbox_inches='tight')
+            plt.close(fig)
+        except Exception as e:
+            logging.warning("[QM] %s: qiskit-metal qgeometry plot 실패(%s)", state.processor_name, e)
+            plt.close('all')
+
+    if length_rows:
+        report_path = os.path.join(dir, "qmetal_length_report.csv")
+        with open(report_path, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "processor", "coupler", "status",
+                    "target_um", "rt_length_um", "qmetal_length_um",
+                    "err_pct", "qmetal_visual_err_pct",
+                ],
+            )
+            writer.writeheader()
+            writer.writerows(length_rows)
+        logging.info("[QM] qiskit-metal length report 저장: %s", report_path)
+
+
+def rendering_qiskit_metal_native(dir, states, params=None):
+    os.environ.setdefault('QISKIT_METAL_HEADLESS', '1')
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+    try:
+        from qiskit_metal import QComponent, draw
+        from qiskit_metal import designs
+        from qiskit_metal.qlibrary.qubits.transmon_pocket import TransmonPocket
+        from qiskit_metal.qlibrary.tlines.meandered import RouteMeander
+        from qiskit_metal.renderers.renderer_mpl.mpl_renderer import QMplRenderer
+    except Exception as e:
+        logging.warning("[QM-native] qiskit-metal import 실패(%s) -- native 렌더링을 건너뜁니다.", e)
+        return
+
+    os.makedirs(dir, exist_ok=True)
+
+    class FallbackRoutedCouplerPath(QComponent):
+        default_options = dict(points=[], trace_width='10um', trace_gap='6um')
+
+        def make(self):
+            pts = [
+                (self.design.parse_value(f'{x}um'), self.design.parse_value(f'{y}um'))
+                for x, y in self.options.points
+            ]
+            if len(pts) < 2:
+                return
+            line = draw.LineString(pts)
+            trace_width = self.design.parse_value(self.options.trace_width)
+            trace_gap = self.design.parse_value(self.options.trace_gap)
+            self.options._actual_length = f'{line.length} {self.design.get_units()}'
+            self.add_qgeometry('path', {'trace': line}, width=trace_width, fillet=0.0)
+            self.add_qgeometry(
+                'path', {'cut': line},
+                width=trace_width + 2.0 * trace_gap,
+                fillet=0.0,
+                subtract=True,
+            )
+
+    report_rows: list[dict[str, object]] = []
+    meander_spacings_um = _qmetal_native_meander_spacings(params)
+    lead_straight_um = _qmetal_native_lead_straight_um(params)
+    length_tolerance_pct = _qmetal_native_length_tolerance_pct(params)
+    cut_half_width_mm = (
+        float(getattr(params, "cpw_trace_width_um", 10.0)) / 2.0
+        + float(getattr(params, "cpw_trace_gap_um", 6.0))
+    ) / 1000.0
+    min_route_spacing_mm = (
+        float(getattr(params, "qmetal_native_min_route_spacing_um", 0.0)) / 1000.0
+    )
+
+    for state in states:
+        slot_of_qubit, slot_name_of = _assign_qm_slots(state)
+        design = designs.DesignPlanar()
+        accepted_native_routes = []
+        qubit_components = {}
+        qubit_bodies_mm = {
+            qid: (
+                (qubit.x - qubit.w / 2.0) / 1000.0,
+                (qubit.y - qubit.h / 2.0) / 1000.0,
+                (qubit.x + qubit.w / 2.0) / 1000.0,
+                (qubit.y + qubit.h / 2.0) / 1000.0,
+            )
+            for qid, qubit in state.qubits.items()
+        }
+
+        for qid, qubit in state.qubits.items():
+            connection_pads = {
+                _QM_SLOTS[slot]: dict(loc_W=slot[0], loc_H=slot[1], pad_width='30um', pad_gap='10um')
+                for slot in slot_of_qubit[qid]
+            }
+            qubit_components[qid] = TransmonPocket(design, f"Q{qid}", options=dict(
+                pos_x=f'{qubit.x}um', pos_y=f'{qubit.y}um',
+                pocket_width=f'{qubit.w}um', pocket_height=f'{qubit.h}um',
+                pad_width='200um', pad_height='80um', pad_gap='30um',
+                connection_pads=connection_pads,
+            ))
+
+        rendered = 0
+        skipped = 0
+        for key, coupler in state.couplers.items():
             pin1 = slot_name_of.get((key, key[0]))
             pin2 = slot_name_of.get((key, key[1]))
+            row = {
+                "processor": state.processor_name,
+                "coupler": f"{key[0]}-{key[1]}",
+                "target_um": f"{coupler.l:.6f}",
+                "actual_um": "",
+                "err_pct": "",
+                "meander_spacing_um": "",
+                "native_drc": "",
+                "status": "",
+            }
             if pin1 is None or pin2 is None:
-                logging.warning(
-                    "[QM] %s: coupler %s 근사 렌더링 생략(슬롯 충돌로 한쪽 핀이 없음)",
-                    state.processor_name, key,
-                )
+                skipped += 1
+                row["status"] = "missing_pin_slot"
+                report_rows.append(row)
                 continue
             try:
-                RouteMeander(design, f"C{key[0]}_{key[1]}", options=dict(
-                    pin_inputs=dict(
-                        start_pin=dict(component=f"Q{key[0]}", pin=pin1),
-                        end_pin=dict(component=f"Q{key[1]}", pin=pin2),
-                    ),
-                    trace_width='10um',
-                    trace_gap='6um',
-                    fillet='30um',
-                    total_length=f'{coupler.l}um',
-                    meander=dict(spacing='120um', asymmetry='0um'),
-                    lead=dict(start_straight='150um', end_straight='150um'),
-                ))
-            except Exception as e:
-                logging.warning(
-                    "[QM] %s: coupler %s RouteMeander 실패(%s) -- 이 커플러만 생략",
-                    state.processor_name, key, e,
+                route, spacing_um = _add_native_route_meander(
+                    RouteMeander, design, key, pin1, pin2, coupler.l,
+                    meander_spacings_um, lead_straight_um, length_tolerance_pct,
+                    accepted_native_routes, qubit_bodies_mm,
+                    cut_half_width_mm, min_route_spacing_mm,
                 )
+                actual_um = _qmetal_component_actual_length_um(design, route)
+                line_geom, cut_geom = _qmetal_route_geometries(
+                    design, route.name, cut_half_width_mm
+                )
+                if line_geom is not None and cut_geom is not None:
+                    accepted_native_routes.append((key, line_geom, cut_geom))
+                rendered += 1
+                row["status"] = "rendered_native"
+                row["native_drc"] = "clean"
+                row["meander_spacing_um"] = f"{spacing_um:.6f}"
+                if actual_um is not None:
+                    row["actual_um"] = f"{actual_um:.6f}"
+                    row["err_pct"] = f"{((actual_um - coupler.l) / coupler.l * 100.0):.6f}"
+            except Exception as e:
+                if coupler.waypoints:
+                    fallback_name = f"F{key[0]}_{key[1]}"
+                    points = _qmetal_pin_aligned_waypoints(
+                        coupler.waypoints,
+                        qubit_components.get(key[0]), pin1,
+                        qubit_components.get(key[1]), pin2,
+                    )
+                    FallbackRoutedCouplerPath(
+                        design, fallback_name,
+                        options=dict(points=points, trace_width='10um', trace_gap='6um'),
+                    )
+                    line_geom, cut_geom = _qmetal_route_geometries(
+                        design, fallback_name, cut_half_width_mm
+                    )
+                    if line_geom is not None and cut_geom is not None:
+                        accepted_native_routes.append((key, line_geom, cut_geom))
+                    actual_um = _qmetal_path_length_um(design, fallback_name)
+                    rendered += 1
+                    row["status"] = "fallback_pnr_path"
+                    row["native_drc"] = f"RouteMeander rejected:{type(e).__name__}"
+                    if actual_um is not None:
+                        row["actual_um"] = f"{actual_um:.6f}"
+                        row["err_pct"] = f"{((actual_um - coupler.l) / coupler.l * 100.0):.6f}"
+                    logging.warning(
+                        "[QM-native] %s: coupler %s RouteMeander 충돌, PnR qgeometry path로 대체(%s)",
+                        state.processor_name, key, e,
+                    )
+                else:
+                    skipped += 1
+                    row["status"] = f"route_error:{type(e).__name__}"
+                    logging.warning("[QM-native] %s: coupler %s RouteMeander 실패(%s)", state.processor_name, key, e)
+            report_rows.append(row)
 
-        fig, ax = plt.subplots(figsize=(12, 12))
-        for _, table in design.qgeometry.tables.items():
-            if not table.empty:
-                table.plot(ax=ax, alpha=0.6, edgecolor='blue')
-        ax.set_aspect('equal')
-        ax.set_title(f"{state.processor_name} | Qiskit-Metal CAD (4-slot approx.)")
-        plt.grid(True, linestyle='--', alpha=0.4)
-        plt.savefig(os.path.join(dir, f"{state.processor_name}.png"), dpi=200, bbox_inches='tight')
-        plt.close(fig)
+        try:
+            fig, ax = plt.subplots(figsize=(12, 12))
+            renderer = QMplRenderer(None, design, logging.getLogger())
+            renderer.render(ax)
+            _fit_axis_to_qmetal_geometry(ax, design)
+            ax.set_aspect('equal')
+            ax.set_title(
+                f"{state.processor_name} | Qiskit-Metal native RouteMeander "
+                f"(rendered={rendered}, skipped={skipped})"
+            )
+            ax.grid(True, linestyle='-', linewidth=0.5, alpha=0.18)
+            fig.savefig(os.path.join(dir, f"{state.processor_name}.png"), dpi=200, bbox_inches='tight')
+            plt.close(fig)
+        except Exception as e:
+            logging.warning("[QM-native] %s: QMplRenderer 실패(%s)", state.processor_name, e)
+            plt.close('all')
+
+        chip_rows = [
+            r for r in report_rows
+            if r["processor"] == state.processor_name
+            and r["status"] in {"rendered_native", "fallback_pnr_path"}
+            and r["err_pct"]
+        ]
+        if chip_rows:
+            errs = [abs(float(r["err_pct"])) for r in chip_rows]
+            logging.info(
+                "[QM-native] %s: RouteMeander rendered=%d/%d max_abs_err=%.3f%% within5=%.1f%% spacings=%s",
+                state.processor_name, rendered, len(state.couplers), max(errs),
+                sum(1 for e in errs if e <= 5.0) / len(errs) * 100.0,
+                _qmetal_native_spacing_histogram(chip_rows),
+            )
+        else:
+            logging.info("[QM-native] %s: RouteMeander rendered=0/%d", state.processor_name, len(state.couplers))
+
+    if report_rows:
+        report_path = os.path.join(dir, "qmetal_native_route_report.csv")
+        with open(report_path, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "processor", "coupler", "status", "target_um", "actual_um",
+                    "err_pct", "meander_spacing_um", "native_drc",
+                ],
+            )
+            writer.writeheader()
+            writer.writerows(report_rows)
+        logging.info("[QM-native] qiskit-metal native route report 저장: %s", report_path)
+
+
+def _qmetal_native_meander_spacings(params) -> list[float]:
+    values = getattr(params, "qmetal_native_meander_spacings_um", None)
+    if values is None:
+        values = [200.0]
+    if isinstance(values, (int, float)):
+        values = [float(values)]
+    out = []
+    for value in values:
+        try:
+            spacing = float(value)
+        except (TypeError, ValueError):
+            continue
+        if spacing > 0.0 and spacing not in out:
+            out.append(spacing)
+    return sorted(out or [200.0], reverse=True)
+
+
+def _qmetal_native_lead_straight_um(params) -> float:
+    try:
+        return max(0.0, float(getattr(params, "qmetal_native_lead_straight_um", 80.0)))
+    except (TypeError, ValueError):
+        return 80.0
+
+
+def _qmetal_native_length_tolerance_pct(params) -> float:
+    try:
+        return max(0.0, float(getattr(params, "qmetal_native_length_tolerance_pct", 5.0)))
+    except (TypeError, ValueError):
+        return 5.0
+
+
+def _add_native_route_meander(
+    route_meander_cls, design, key: tuple[int, int], pin1: str, pin2: str,
+    target_length_um: float, spacings_um: list[float], lead_straight_um: float,
+    length_tolerance_pct: float, accepted_routes, qubit_bodies_mm: dict,
+    cut_half_width_mm: float, min_route_spacing_mm: float,
+):
+    last_error: Exception | None = None
+    best = None
+    for spacing_um in spacings_um:
+        component_name = f"N{key[0]}_{key[1]}_S{int(round(spacing_um))}"
+        try:
+            route = route_meander_cls(design, component_name, options=dict(
+                pin_inputs=dict(
+                    start_pin=dict(component=f"Q{key[0]}", pin=pin1),
+                    end_pin=dict(component=f"Q{key[1]}", pin=pin2),
+                ),
+                trace_width='10um',
+                trace_gap='6um',
+                fillet='30um',
+                total_length=f'{target_length_um}um',
+                meander=dict(spacing=f'{spacing_um}um', asymmetry='0um'),
+                lead=dict(
+                    start_straight=f'{lead_straight_um}um',
+                    end_straight=f'{lead_straight_um}um',
+                ),
+            ))
+            actual_um = _qmetal_component_actual_length_um(design, route)
+            if actual_um is None or target_length_um <= 0.0:
+                actual_ok = True
+                abs_err_pct = 0.0
+            else:
+                abs_err_pct = abs((actual_um - target_length_um) / target_length_um * 100.0)
+                actual_ok = abs_err_pct <= length_tolerance_pct
+            line_geom, cut_geom = _qmetal_route_geometries(
+                design, component_name, cut_half_width_mm
+            )
+            conflict = _native_route_conflict(
+                key, line_geom, cut_geom, accepted_routes, qubit_bodies_mm,
+                min_route_spacing_mm,
+            )
+            if conflict is None:
+                if best is None or abs_err_pct < best[0]:
+                    best = (abs_err_pct, spacing_um)
+                if actual_ok:
+                    return route, spacing_um
+            _delete_qmetal_component(design, component_name)
+            if conflict is not None:
+                last_error = RuntimeError(f"spacing {spacing_um}um native DRC conflict: {conflict}")
+                continue
+            last_error = RuntimeError(
+                f"spacing {spacing_um}um length error {abs_err_pct:.3f}% "
+                f"> {length_tolerance_pct:.3f}%"
+            )
+        except Exception as e:
+            _delete_qmetal_component(design, component_name)
+            last_error = e
+    if best is not None:
+        _abs_err_pct, spacing_um = best
+        component_name = f"N{key[0]}_{key[1]}_S{int(round(spacing_um))}"
+        route = route_meander_cls(design, component_name, options=dict(
+            pin_inputs=dict(
+                start_pin=dict(component=f"Q{key[0]}", pin=pin1),
+                end_pin=dict(component=f"Q{key[1]}", pin=pin2),
+            ),
+            trace_width='10um',
+            trace_gap='6um',
+            fillet='30um',
+            total_length=f'{target_length_um}um',
+            meander=dict(spacing=f'{spacing_um}um', asymmetry='0um'),
+            lead=dict(
+                start_straight=f'{lead_straight_um}um',
+                end_straight=f'{lead_straight_um}um',
+            ),
+        ))
+        return route, spacing_um
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("no RouteMeander spacing candidates")
+
+
+def _qmetal_route_geometries(design, component_name: str, cut_half_width_mm: float):
+    try:
+        component = design.components[component_name]
+    except Exception:
+        return None, None
+    table = design.qgeometry.tables.get("path")
+    if table is None or table.empty or "component" not in table:
+        return None, None
+    rows = table[table["component"] == component.id]
+    if rows.empty or "geometry" not in rows:
+        return None, None
+    trace_rows = rows[rows.index == "trace"] if "trace" in rows.index else rows
+    line_geom = trace_rows.iloc[0]["geometry"]
+    if line_geom is None or line_geom.is_empty:
+        return None, None
+    cut_geom = line_geom.buffer(cut_half_width_mm, cap_style=2, join_style=2)
+    return line_geom, cut_geom
+
+
+def _native_route_conflict(
+    key: tuple[int, int], line_geom, cut_geom, accepted_routes,
+    qubit_bodies_mm: dict, min_route_spacing_mm: float,
+) -> str | None:
+    if line_geom is None or cut_geom is None:
+        return "missing_path_geometry"
+    for other_key, other_line, other_cut in accepted_routes:
+        shared = set(key) & set(other_key)
+        test_cut = cut_geom
+        test_other_cut = other_cut
+        if shared:
+            shared_geoms = []
+            for qid in shared:
+                body = qubit_bodies_mm.get(qid)
+                if body is None:
+                    continue
+                x0, y0, x1, y1 = body
+                shared_geoms.append(box(x0, y0, x1, y1))
+            if shared_geoms:
+                shared_union = unary_union(shared_geoms)
+                test_cut = test_cut.difference(shared_union)
+                test_other_cut = test_other_cut.difference(shared_union)
+        if test_cut.intersection(test_other_cut).area > 1e-12:
+            return f"overlap:{other_key[0]}-{other_key[1]}"
+        if min_route_spacing_mm > 0.0 and test_cut.distance(test_other_cut) + 1e-12 < min_route_spacing_mm:
+            return f"spacing:{other_key[0]}-{other_key[1]}"
+        if not shared and line_geom.crosses(other_line):
+            return f"centerline_cross:{other_key[0]}-{other_key[1]}"
+    return None
+
+
+def _delete_qmetal_component(design, component_name: str) -> None:
+    try:
+        design.delete_component(component_name)
+    except Exception:
+        pass
+
+
+def _delete_qmetal_component(design, component_name: str) -> None:
+    try:
+        design.delete_component(component_name)
+    except Exception:
+        pass
+
+
+def _qmetal_native_spacing_histogram(rows: list[dict[str, object]]) -> dict[str, int]:
+    hist: dict[str, int] = {}
+    for row in rows:
+        spacing = row.get("meander_spacing_um")
+        if not spacing:
+            continue
+        label = f"{float(spacing):.0f}um"
+        hist[label] = hist.get(label, 0) + 1
+    return hist
+
+
+def _qmetal_component_actual_length_um(design, component) -> float | None:
+    actual = getattr(component.options, "_actual_length", None)
+    if not actual:
+        return None
+    try:
+        return float(design.parse_value(actual)) * 1000.0
+    except Exception:
+        return None
+
+
+def _fit_axis_to_qmetal_geometry(ax, design, margin_ratio: float = 0.04) -> None:
+    bounds = []
+    for table in design.qgeometry.tables.values():
+        if table.empty or "geometry" not in table:
+            continue
+        for geom in table["geometry"]:
+            if geom is not None and not geom.is_empty:
+                bounds.append(geom.bounds)
+    if not bounds:
+        return
+    min_x = min(b[0] for b in bounds)
+    min_y = min(b[1] for b in bounds)
+    max_x = max(b[2] for b in bounds)
+    max_y = max(b[3] for b in bounds)
+    span_x = max(max_x - min_x, 1e-3)
+    span_y = max(max_y - min_y, 1e-3)
+    pad = max(span_x, span_y) * margin_ratio
+    ax.set_xlim(min_x - pad, max_x + pad)
+    ax.set_ylim(min_y - pad, max_y + pad)
+
+
+def _qmetal_path_length_um(design, component_name: str) -> float | None:
+    try:
+        component = design.components[component_name]
+    except Exception:
+        return None
+    table = design.qgeometry.tables.get("path")
+    if table is None or table.empty or "component" not in table:
+        return None
+    rows = table[table["component"] == component.id]
+    if rows.empty or "geometry" not in rows:
+        return None
+    trace_rows = rows[rows.index == "trace"] if "trace" in rows.index else rows
+    geometry = trace_rows.iloc[0]["geometry"]
+    return float(geometry.length) * 1000.0
+
+
+def _qmetal_pin_aligned_waypoints(
+    waypoints: list[tuple[float, float]],
+    start_component,
+    start_pin: str | None,
+    end_component,
+    end_pin: str | None,
+    lead_um: float = 20.0,
+) -> list[tuple[float, float]]:
+    if len(waypoints) < 2:
+        return waypoints
+
+    start = _qmetal_pin_lead_points(start_component, start_pin, lead_um)
+    end = _qmetal_pin_lead_points(end_component, end_pin, lead_um)
+    if start is None and end is None:
+        return waypoints
+
+    interior = list(waypoints[1:-1])
+    out: list[tuple[float, float]] = []
+    if start is None:
+        out.append(waypoints[0])
+    else:
+        pin_pt, lead_pt = start
+        out.extend([pin_pt, lead_pt])
+    out.extend(interior)
+    if end is None:
+        out.append(waypoints[-1])
+    else:
+        pin_pt, lead_pt = end
+        out.extend([lead_pt, pin_pt])
+    return _dedupe_points(out)
+
+
+def _qmetal_pin_lead_points(component, pin_name: str | None, lead_um: float) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    if component is None or pin_name is None:
+        return None
+    pin = component.pins.get(pin_name)
+    if pin is None:
+        return None
+    middle = pin["middle"]
+    normal = pin["normal"]
+    pin_pt = (float(middle[0]) * 1000.0, float(middle[1]) * 1000.0)
+    lead_pt = (
+        pin_pt[0] + float(normal[0]) * lead_um,
+        pin_pt[1] + float(normal[1]) * lead_um,
+    )
+    return pin_pt, lead_pt
+
+
+def _dedupe_points(points: list[tuple[float, float]], eps: float = 1e-6) -> list[tuple[float, float]]:
+    if not points:
+        return []
+    out = [points[0]]
+    for point in points[1:]:
+        if (abs(point[0] - out[-1][0]) > eps) or (abs(point[1] - out[-1][1]) > eps):
+            out.append(point)
+    return out
+
+
+def _log_qmetal_length_summary(state: ChipState, rows: list[dict[str, object]]) -> None:
+    chip_rows = [r for r in rows if r["processor"] == state.processor_name and r["status"] == "rendered"]
+    if not chip_rows:
+        logging.info("[QM] %s: qiskit-metal rendered couplers=0", state.processor_name)
+        return
+    errs = [abs(float(r["err_pct"])) for r in chip_rows]
+    within_5 = sum(1 for e in errs if e <= 5.0)
+    logging.info(
+        "[QM] %s: rendered=%d/%d RT_length max_abs_err=%.3f%% within5=%.1f%%",
+        state.processor_name,
+        len(chip_rows),
+        len(state.couplers),
+        max(errs),
+        within_5 / len(chip_rows) * 100.0,
+    )
+
+
+def _draw_qmetal_cpw_overlay(ax, design) -> None:
+    table = design.qgeometry.tables.get("path")
+    if table is None or table.empty or "geometry" not in table:
+        return
+    for _, row in table.iterrows():
+        geom = row["geometry"]
+        if geom.is_empty:
+            continue
+        subtract = bool(row.get("subtract", False))
+        color = "#d8ecff" if subtract else "#1f77b4"
+        alpha = 0.22 if subtract else 0.82
+        zorder = 1 if subtract else 5
+        _plot_linestring(ax, geom, color=color, alpha=alpha, linewidth=2.4 if subtract else 1.8, zorder=zorder)
+
+
+def _plot_linestring(ax, geom, color: str, alpha: float, linewidth: float, zorder: int) -> None:
+    if geom.geom_type == "LineString":
+        xs, ys = geom.xy
+        ax.plot(xs, ys, color=color, alpha=alpha, linewidth=linewidth, solid_capstyle="round", zorder=zorder)
+        return
+    if geom.geom_type == "MultiLineString":
+        for line in geom.geoms:
+            _plot_linestring(ax, line, color, alpha, linewidth, zorder)
+
+
+def _draw_missing_qmetal_couplers(ax, state: ChipState, missing_keys: list[tuple[int, int]]) -> None:
+    for key in missing_keys:
+        pts = state.ports.get(key)
+        if pts is None:
+            q1, q2 = state.qubits[key[0]], state.qubits[key[1]]
+            pts = ((q1.x, q1.y), (q2.x, q2.y))
+        (x0, y0), (x1, y1) = pts
+        ax.plot(
+            [x0, x1], [y0, y1],
+            color=_OOB_COLOR,
+            linewidth=1.4,
+            linestyle=":",
+            alpha=0.7,
+            zorder=6,
+        )

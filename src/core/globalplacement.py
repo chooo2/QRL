@@ -77,6 +77,8 @@ class GlobalPlacement:
         # 칩 이름 -> leg_ok가 실제로 후보를 걸러낸 횟수(2026-09-21 검증 보고용) — 이웃
         # 방향 포트로 바꾼 뒤 케이스 A가 거의 사라져 leg_ok가 얼마나 덜 걸리는지 확인.
         self.leg_ok_blocks: dict[str, int] = {}
+        self.placement_failures: dict[str, list[tuple[tuple[int, int], str]]] = {}
+        self.failure_stats: dict[str, dict[tuple[int, int], dict[str, int | str]]] = {}
 
     # 칩 목록을 배치한다. SegmentPlacementInfeasibleError가 난 칩(커플러 전부 실패)은
     # skipped에 (이름, 사유)로 기록하고 건너뛴다 — 한 칩 실패로 전체가 죽지 않는다.
@@ -110,16 +112,20 @@ class GlobalPlacement:
         new_couplers: dict[tuple[int, int], Coupler] = {}
         failed = 0
         short = 0  # 경로는 찾았지만 k개에 못 미친 커플러(요청 2절: 실패 아니라 미달로 다룸)
+        failures: list[tuple[tuple[int, int], str]] = []
+        failure_stats: dict[tuple[int, int], dict[str, int | str]] = {}
         leg_ok_blocks = 0  # leg_ok가 실제로 후보를 걸러낸 횟수(검증 보고용) — _place_chain에 누산기로 전달
         for key in order:
             coupler = state.couplers[key]
-            segs, blocks = _place_chain(coupler, state.qubits, state.ports.get(key),
-                                         state.coupler_regions.get(key), cell,
-                                         state.chip_width, state.chip_height,
-                                         qubit_owner, segment_occupied, qubit_rects)
+            segs, blocks, reason, stats = _place_chain(coupler, state.qubits, state.ports.get(key),
+                                                        state.coupler_regions.get(key), cell,
+                                                        state.chip_width, state.chip_height,
+                                                        qubit_owner, segment_occupied, qubit_rects)
             leg_ok_blocks += blocks
             if segs is None:
                 failed += 1
+                failures.append((key, reason or "unknown"))
+                failure_stats[key] = stats
                 segs = []
             elif 0 < len(segs) < coupler.num_segments:
                 short += 1
@@ -132,6 +138,13 @@ class GlobalPlacement:
             sum(len(c.segments) for c in new_couplers.values()), leg_ok_blocks,
         )
         self.leg_ok_blocks[state.processor_name] = leg_ok_blocks
+        self.placement_failures[state.processor_name] = failures
+        self.failure_stats[state.processor_name] = failure_stats
+        if failures:
+            by_reason: dict[str, int] = {}
+            for _key, reason in failures:
+                by_reason[reason] = by_reason.get(reason, 0) + 1
+            logging.info("[GP] %s: 실패 사유별 건수 %s", state.processor_name, by_reason)
 
         if n_total > 0 and failed == n_total:
             raise SegmentPlacementInfeasibleError(
@@ -334,7 +347,8 @@ def _region_index_range(lo: float, hi: float, cell: float, i_max: int) -> tuple[
 # "k개를 넘기려고 박스 밖으로 나가지 마라" — 박스 안에서 아예 길이 없으면 실패다).
 def _find_chain_path(
     start: tuple[int, int], end: tuple[int, int], is_free, k: int,
-    max_expansions: int = 20000,
+    max_expansions: int = 100000,
+    max_cells: int | None = None,
     leg_ok=None,
 ) -> list[tuple[int, int]] | None:
     if k <= 0:
@@ -347,82 +361,83 @@ def _find_chain_path(
     def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    # 격자는 이분 그래프라 start->end 단순 경로의 길이(셀 개수)는 항상 같은 홀짝성만
-    # 가능하다 — 걸음 수(길이-1)가 manhattan(start,end)와 같은 홀짝이어야 하므로(각 걸음이
-    # 거리를 ±1만 바꾸니까), 길이 자체는 항상 manhattan(start,end)+1과 같은 홀짝이다. k가
-    # 그 홀짝과 다르면 "정확히 k개"는 장애물과 무관하게 수학적으로 아예 불가능하다 — 실측
-    # (grid_25 재현: k=10, manhattan=4일 때 9-4=5로 홀수)으로 처음엔 이걸 놓쳐서, 매 반복의
-    # 가지치기가 "고정된 k" 기준으로 계산되는 바람에 틀린 홀짝이 첫 걸음부터 모든 분기를
-    # 막아버려 "더 짧은 경로조차" 못 찾고 완전 실패로 돌아갔다(요청 2절이 원하는 "짧은
-    # 경로라도 배치"를 아예 시도조차 못 함). 고친 방법: 탐색을 시작하기 전에 목표 길이를
-    # k 또는 k-1 중 실제로 가능한 홀짝으로 맞춘다 — k와 k-1은 항상 서로 다른 홀짝이므로
-    # 반드시 둘 중 하나는 맞는다. 이렇게 하면 가지치기 공식이 항상 "달성 가능한 목표"
-    # 기준으로 서기 때문에(아래 dfs 내부의 홀짝 불변식이 시작점부터 성립하고, 한 걸음마다
-    # (remaining - 거리)가 0 또는 -2만큼만 바뀌므로 그 불변식이 끝까지 유지된다), 진짜
-    # 장애물 때문에 막히는 경우와 "애초에 숫자가 안 맞아서" 막히는 경우가 더 이상 섞이지
-    # 않는다.
-    target = k
-    if (target - 1 - manhattan(start, end)) % 2 != 0:
-        target -= 1
-    if target <= 0:
+    def parity_ok(target_len: int) -> bool:
+        return (target_len - 1 - manhattan(start, end)) % 2 == 0
+
+    targets: list[int] = []
+    if parity_ok(k):
+        targets.append(k)
+    else:
+        targets.append(k + 1)
+        if k > 1:
+            targets.append(k - 1)
+    if max_cells is not None:
+        targets = [target for target in targets if target <= max_cells]
+    targets = [target for target in targets if target > 0]
+    if not targets:
         return None
 
-    best_path: list[tuple[int, int]] | None = None
-    path = [start]
-    visited = {start}
-    expansions = [0]
-    k = target
+    best_overall: list[tuple[int, int]] | None = None
 
-    def dfs() -> bool:  # True = 그만 찾아도 됨(정확히 k개 성공 또는 예산 소진)
-        nonlocal best_path
-        expansions[0] += 1
-        if expansions[0] > max_expansions:
-            return True
+    for target in targets:
+        best_path: list[tuple[int, int]] | None = None
+        path = [start]
+        visited = {start}
+        expansions = [0]
+        target_len = target
 
-        cur = path[-1]
-        if cur == end:
-            if best_path is None or len(path) > len(best_path):
-                best_path = list(path)
-            if len(path) == k:
+        def dfs() -> bool:  # True = 그만 찾아도 됨(정확히 target_len개 성공 또는 예산 소진)
+            nonlocal best_path
+            expansions[0] += 1
+            if expansions[0] > max_expansions:
                 return True
 
-        if len(path) >= k:
+            cur = path[-1]
+            if cur == end:
+                if best_path is None or len(path) > len(best_path):
+                    best_path = list(path)
+                if len(path) == target_len:
+                    return True
+
+            if len(path) >= target_len:
+                return False
+
+            remaining = target_len - len(path)
+            candidates = []
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                n = (cur[0] + dx, cur[1] + dy)
+                if n in visited or not is_free(n):
+                    continue
+                if leg_ok is not None and (cur == start or n == end) and not leg_ok(cur, n):
+                    continue
+                d = manhattan(n, end)
+                slack = (remaining - 1) - d
+                if slack < 0 or slack % 2 != 0:
+                    continue
+                candidates.append((n, d))
+
+            cur_slack = remaining - manhattan(cur, end)
+            candidates.sort(key=lambda t: t[1], reverse=(cur_slack > 0))
+
+            for n, _d in candidates:
+                visited.add(n)
+                path.append(n)
+                done = dfs()
+                path.pop()
+                visited.discard(n)
+                if done:
+                    return True
             return False
 
-        remaining = k - len(path)
-        candidates = []
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            n = (cur[0] + dx, cur[1] + dy)
-            if n in visited or not is_free(n):
-                continue
-            # cur가 start이거나 n이 end면(둘 다인 경우 — start-end 직행 포함) 이 걸음은
-            # RT가 실제로 포트 좌표를 잇는 leg가 된다 — leg_ok가 그 leg를 검사한다(모듈
-            # 상단 _segment_crosses_any_qubit 참고). 순수 중간 구간(둘 다 아님)은 이미
-            # 안전함이 증명돼 있어(어느 큐빗과도 안 겹치는 두 인접 셀의 합집합 안에만
-            # 있음) 검사하지 않는다.
-            if leg_ok is not None and (cur == start or n == end) and not leg_ok(cur, n):
-                continue
-            d = manhattan(n, end)
-            slack = (remaining - 1) - d
-            if slack < 0 or slack % 2 != 0:
-                continue  # 이 이웃으로 가면 남은 예산 안에 end 도달 불가(안전한 가지치기)
-            candidates.append((n, d))
+        dfs()
+        if best_path is not None and len(best_path) >= target_len:
+            return best_path
+        if best_path is not None and (
+            best_overall is None or len(best_path) > len(best_overall)
+        ):
+            best_overall = best_path
 
-        cur_slack = remaining - manhattan(cur, end)
-        candidates.sort(key=lambda t: t[1], reverse=(cur_slack > 0))
-
-        for n, _d in candidates:
-            visited.add(n)
-            path.append(n)
-            done = dfs()
-            path.pop()
-            visited.discard(n)
-            if done:
-                return True
-        return False
-
-    dfs()
-    return best_path
+    return best_overall
 
 
 # 포트가 속한 셀이 이제 항상 박스 안에 있다는 보장이 없다 — core/state.py의 Coupler.region()
@@ -438,7 +453,7 @@ def _find_chain_path(
 def _resolve_endpoint(
     port_pt: tuple[float, float], owner_qubit: Qubit,
     in_box, is_free, qubit_rects: dict[int, tuple[float, float, float, float]],
-    cell: float, max_shift: int = 3,
+    cell: float, region_cells: list[tuple[int, int]] | None = None, max_shift: int = 3,
 ) -> tuple[tuple[int, int], bool] | tuple[None, bool]:
     base = (int(math.floor(port_pt[0] / cell)), int(math.floor(port_pt[1] / cell)))
     if in_box(base) and is_free(base):
@@ -456,6 +471,21 @@ def _resolve_endpoint(
         if _segment_crosses_any_qubit(port_pt, cand_pt, qubit_rects):
             continue
         return cand, False  # False = 포트와 별개인 셀 -- RT가 리드로 잇는다
+
+    if region_cells is not None:
+        candidates = []
+        for cand in region_cells:
+            if not is_free(cand):
+                continue
+            cand_pt = ((cand[0] + 0.5) * cell, (cand[1] + 0.5) * cell)
+            if _segment_crosses_any_qubit(port_pt, cand_pt, qubit_rects):
+                continue
+            d = (cand_pt[0] - port_pt[0]) ** 2 + (cand_pt[1] - port_pt[1]) ** 2
+            candidates.append((d, cand))
+        if candidates:
+            candidates.sort()
+            return candidates[0][1], False
+
     return None, False
 
 
@@ -477,15 +507,21 @@ def _place_chain(
     cell: float, chip_w: float, chip_h: float,
     qubit_owner: dict[tuple[int, int], set[int]], segment_occupied: set[tuple[int, int]],
     qubit_rects: dict[int, tuple[float, float, float, float]],
-) -> tuple[list[Segment] | None, int]:
+) -> tuple[list[Segment] | None, int, str | None, dict[str, int | str]]:
     # 반환값의 두 번째 항목(leg_ok가 실제로 후보를 걸러낸 횟수)은 검증 보고용이다 —
     # 2026-09-21 이웃 방향 포트 도입 후 케이스 A가 거의 사라져 이 값이 크게 줄 것으로
     # 예상된다(GlobalPlacement._place가 칩별로 누산해 로그에 남긴다).
     k = coupler.num_segments
+    stats: dict[str, int | str] = {
+        "required_segments": k,
+        "region_cells": 0,
+        "free_cells_at_failure": 0,
+        "occupied_cells_at_failure": len(segment_occupied),
+    }
     if k == 0:
-        return [], 0
+        return [], 0, None, stats
     if ports is None or box is None:
-        return None, 0  # FP가 포트/박스를 못 정한 커플러 — 이론상 skipped 칩에서만 나오므로 여기 안 옴
+        return None, 0, "no_ports_or_region", stats  # FP가 포트/박스를 못 정한 커플러 — 이론상 skipped 칩에서만 나오므로 여기 안 옴
 
     q1, q2 = qubits[coupler.q1], qubits[coupler.q2]
     p1, p2 = ports
@@ -496,15 +532,23 @@ def _place_chain(
     ri = _region_index_range(x0, x1, cell, i_max)
     rj = _region_index_range(y0, y1, cell, j_max)
     if ri is None or rj is None:
-        return None, 0
+        return None, 0, "empty_region_grid", stats
     i_lo, i_hi = ri
     j_lo, j_hi = rj
+    stats["region_cells"] = (i_hi - i_lo + 1) * (j_hi - j_lo + 1)
 
     def in_box(c: tuple[int, int]) -> bool:
         return i_lo <= c[0] <= i_hi and j_lo <= c[1] <= j_hi
 
     def is_free(c: tuple[int, int]) -> bool:
         return in_box(c) and not _cell_blocked(coupler, c, cell, qubits, ports, qubit_owner, segment_occupied)
+
+    free_cells = sum(
+        1 for i in range(i_lo, i_hi + 1) for j in range(j_lo, j_hi + 1)
+        if is_free((i, j))
+    )
+    stats["free_cells_at_failure"] = free_cells
+    region_cells = [(i, j) for i in range(i_lo, i_hi + 1) for j in range(j_lo, j_hi + 1)]
 
     # start/end: 포트가 속한 셀이 박스 안 + 가용이면 그대로 쓰고(케이스 A, 예전과 동일),
     # 아니면(케이스 B — Coupler.region()이 자기 큐빗 몸체 앞에서 박스를 핀으로 멈췄음)
@@ -514,10 +558,10 @@ def _place_chain(
     # 큐빗 몸체 안쪽일 수 있으므로) — 케이스 B는 그 셀 자체가 이미 어떤 큐빗과도 안 겹치므로
     # (그래서 is_free를 통과했다) 중심 그대로 써도 안전하고, RT가 포트<->그 셀 사이에
     # 실제 리드 세그먼트를 그린다(router.py 참고).
-    start, start_is_port = _resolve_endpoint(p1, q1, in_box, is_free, qubit_rects, cell)
-    end, end_is_port = _resolve_endpoint(p2, q2, in_box, is_free, qubit_rects, cell)
+    start, start_is_port = _resolve_endpoint(p1, q1, in_box, is_free, qubit_rects, cell, region_cells)
+    end, end_is_port = _resolve_endpoint(p2, q2, in_box, is_free, qubit_rects, cell, region_cells)
     if start is None or end is None:
-        return None, 0
+        return None, 0, "endpoint_unresolved", stats
 
     # RT(core/router.py)가 폴리라인의 첫/마지막 연결점으로 셀 중심 대신 실제 포트 좌표를
     # 쓴다(2026-09-20, 관통 수정) — 그런데 포트(큐빗 경계 위의 점)에서 그 다음 셀 중심까지
@@ -540,10 +584,10 @@ def _place_chain(
             blocks[0] += 1
         return ok
 
-    path = _find_chain_path(start, end, is_free, k, leg_ok=leg_ok)
+    path = _find_chain_path(start, end, is_free, k, max_cells=free_cells, leg_ok=leg_ok)
     if path is None:
-        return None, blocks[0]
+        return None, blocks[0], "path_not_found", stats
 
     segment_occupied.update(path)
     return [Segment(idx=idx, x=(i + 0.5) * cell, y=(j + 0.5) * cell)
-            for idx, (i, j) in enumerate(path)], blocks[0]
+            for idx, (i, j) in enumerate(path)], blocks[0], None, stats

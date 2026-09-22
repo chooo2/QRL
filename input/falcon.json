@@ -3,10 +3,10 @@
   "decription": "ibm paris 27 qubit heavy-hex processor",
   "num_qubits": 27,
   "topology": "heavy-hex",
-  "chip_width_um": 6900,
-  "chip_height_um": 6900,
+  "chip_width_um": 20000,
+  "chip_height_um": 20000,
   "_provenance": {
-    "chip_width_um": "01_mainref/bak/input2/heavy-hex/falcon.json (chip_length_um=6900, pre-2026-09-14 snapshot). STALE: 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['ibm_real_device'][27.0]=10049.9 (+45.6%) supersedes this after a two-round resize (die_anchor_resize_v3.json intermediate=6767.6, then v4.json final=10049.9). NOT updated in this repo as of 2026-09-16 -- out of scope for the aspen_11 fix, flagged for future review."
+    "chip_width_um": "Reduced from the temporary 31200um setting to 20000um. The 10049.9um mainref anchor recorded in die_anchor_resize_v4.json is too small for this repository's current FP coupler-box resolution step (falcon fails at 12000/15000um and passes at 20000um in the coarse sweep)."
   },
   "coupling_graph": [
     [0, 1],

@@ -2,10 +2,10 @@
   "processor": "xtree_53",
   "num_qubits": 53,
   "topology": "xtree",
-  "chip_width_um": 9300,
-  "chip_height_um": 9300,
+  "chip_width_um": 30000,
+  "chip_height_um": 30000,
   "_provenance": {
-    "chip_width_um": "01_mainref/bak/input2/xtree/xtree_53.json (chip_length_um=9300, pre-2026-09-14 snapshot). STALE: 01_mainref's current _TOPOLOGY_FAMILY_ANCHORS_UM['xtree'][53.0]=10485.8 (+12.75%) supersedes this after mainref's die-anchor resize research (2026-09-14/15, see 01_mainref/scripts/results_260913/die_anchor_resize_v3.json and v4.json). NOT updated in this repo as of 2026-09-16 -- out of scope for the aspen_11 fix, flagged for future review."
+    "chip_width_um": "Reduced from the temporary 50000um setting to 30000um. The 10485.8um mainref anchor recorded in die-anchor resize notes is too small for this repository's current FP coupler-box resolution step (xtree_53 fails at 15000/20000um and passes at 30000um in the coarse sweep)."
   },
   "coupling_graph": [
     [0, 1],

@@ -7,19 +7,17 @@
         "eagle",
         "aspen_11",
         "aspen_m"
+  ]
+  },
+  "none_processors": {
+    "values": [
+        "grid_25",
+        "xtree_53",
+        "falcon",
+        "eagle",
+        "aspen_11",
+        "aspen_m"
     ]
-  },
-  "chip_width":{
-    "description": "Fallback chip width in micrometers, at chip_baseline_num_qubits qubits, for topology families with no dedicated QPlacer-measured anchor (see _TOPOLOGY_FAMILY_ANCHORS_UM in ChipState.processor_config). Scaled by sqrt(num_qubits / chip_baseline_num_qubits) per processor for those families; heavy-hex/rigetti/xtree/grid use their own QPlacer anchor instead. NOTE: ChipState.processor_config's fallback branch only ever reads THIS key (chip_width) for both dimensions (chips are square there) -- chip_height below is not consulted by the active pipeline, but IS still read directly by src/legacy_rl/tests/test_defect_mask.py, so it is kept.",
-    "values": 10000
-  },
-  "chip_height":{
-    "description": "Fallback chip height in micrometers. NOT read by the active pipeline (ChipState.processor_config's fallback branch reads chip_width for both dimensions -- see its description) -- kept only because src/legacy_rl/tests/test_defect_mask.py reads params.chip_height directly.",
-    "values": 10000
-  },
-  "chip_baseline_num_qubits":{
-    "description": "Qubit count the chip_width/chip_height fallback baseline was calibrated for (used only by topology families without a dedicated QPlacer anchor). Chip area scales linearly with num_qubits (side length ~ sqrt(num_qubits)).",
-    "values": 27
   },
   "qubit_width":{
     "description": "Physical qubit width in micrometers",
@@ -29,13 +27,9 @@
     "description": "Physical qubit height in micrometers",
     "values": 400
   },
-  "coupler_spectrum": {
-    "description": "coupler frequency spectrum in GHz [lo, hi]",
-    "values": [6.0, 7.0]
-  },
-  "qubit_anharmonicity_default_ghz": {
-    "description": "Fallback per-qubit transmon anharmonicity (E_C, negative) in GHz, used only when a processor's input JSON has no anharmonicity_ghz (e.g. legacy/random-heavy-hex processors). Real IBM backends supply per-qubit calibration values via database.py instead. Typical measured range: -0.31 to -0.34 GHz.",
-    "values": -0.33
+  "segment_size_um": {
+    "description": "Square segment side length (um) for QPlacer-style coupler partitioning (see Segment, core/state.py). Taken directly from QPlacer's partition_size (ref/80_QPlacer/Qplacer/qplacer/qplacer_bm/qplacement_param.py:11, benchmark_params.json). QPlacer's own code has no comment or documentation justifying this value either -- no independent physical derivation exists anywhere.",
+    "values": 300.0
   },
   "floorplan_candidate_count": {
     "description": "Baseline number of candidate qubit layouts Floorplan._primary_layout samples (spectral/tree-aware/ring-aware initial coordinate + spring refinement) to minimize edge crossings, before falling back to the deterministic guaranteed-embedding path if none reach zero crossings / min spacing. Actual count is scaled by sqrt(num_qubits/27) (see _primary_layout's effort_scale). Ported unchanged from 01_mainref/src/core/globalplacement.py's floorplan_candidate_count -- no coupler-boundary term anymore (that scoring term was removed along with the coupler-boundary refinement steps FP no longer does; see Floorplan module docstring).",
@@ -44,6 +38,26 @@
   "floorplan_planarity_mode": {
     "description": "How Floorplan._place handles a non-planar coupling graph (zero-crossing single-layer layout is mathematically impossible for one) -- 'strict' raises NonPlanarError, 'crossover' extracts a maximal planar subgraph (maximal_planar_subgraph) and records the cut edges (ChipState.cut_edges) for out-of-plane routing (air bridges) later. No chip in the current benchmark pool is non-planar (verified 2026-08-28), so this only matters for future/larger topologies.",
     "values": "crossover"
+  },
+  "floorplan_grid_edge_span_ratio": {
+    "description": "Grid-topology floorplan scale cap: neighboring qubit distance is capped to this fraction of the corresponding coupler half-wave length. Smaller values compact grid layouts and reduce unused native Qiskit-Metal whitespace, at the cost of denser coupler routing.",
+    "values": 0.445
+  },
+  "floorplan_default_edge_span_ratio": {
+    "description": "Default non-grid floorplan scale cap: neighboring qubit distance is capped to this fraction of the corresponding coupler half-wave length.",
+    "values": 0.65
+  },
+  "grid_compact_mode_enabled": {
+    "description": "Experimental grid_25-only compact mode. When true, grid_25 uses grid_compact_chip_size_um and Router bypasses square segment-chain routing with adaptive CPW centerline candidates.",
+    "values": false
+  },
+  "grid_compact_chip_size_um": {
+    "description": "Target square die side length for experimental grid_25 compact mode.",
+    "values": 7800.0
+  },
+  "grid_compact_route_spacing_um": {
+    "description": "Experimental minimum CPW cut spacing used while selecting adaptive grid compact routes. This is separate from FabricationMapping's stricter reporting threshold.",
+    "values": 80.0
   },
   "octagon_ring_aspect": {
     "description": "Aspect ratio (width/height) of the local polygon template used by Floorplan's ring-aware initial layout (_ring_aware_initial_coordinate/_polygon_template) when the coupling graph has heavy-hex-style 8-qubit rings (_detect_octagon_rings). Ported unchanged from 01_mainref/src/core/globalplacement.py -- a layout tuning constant with no physical derivation, just a shape that empirically reduced crossings for ring topologies there.",
@@ -74,7 +88,7 @@
     "values": 40.0
   },
   "substrate_epsilon_r": {
-    "description": "Substrate relative permittivity used in Coupler.l's CPW half-wavelength formula via eps_eff=(epsilon_r+1)/2 (a microstrip approximation -- see Coupler.l's docstring for the CPW caveat). Default 11.9 is the standard textbook value for silicon, and matches the epsilon_r default in /home/LabMember/ngchoi/research/qiskit_metal/transmon_draw2.py:27 (calc_half_wave_length). This is a tabulated material constant with real external physical grounding (unlike the removed coupler_phase_velocity_m_per_s), but there is no repo-internal measurement/citation for it beyond that reference script.",
+    "description": "Substrate relative permittivity retained for compatibility with existing input construction. Coupler.l currently follows the QPlacer-style formula f = v0/(2L) with v0 ~= 1.3e8 m/s, so this value is not used in the coupler length calculation.",
     "values": 11.9
   },
   "qubit_pad_inset_um": {
@@ -85,9 +99,25 @@
     "description": "Effective CPW meander pitch (um) -- used by Coupler.region()/GlobalPlacement to size each coupler's FP-confirmed placement box (ChipState.coupler_regions) via required_wire_area = Coupler.l * meander_spacing_um. CORRECTED 2026-09-17 from 120 back to 40: 120 had been taken from qiskit-metal RouteMeander's meander=dict(spacing='120um') in /home/LabMember/ngchoi/research/qiskit_metal/transmon_draw2.py:227, reasoning that it 'matches the user's own qiskit-metal rendering script for internal consistency' (see the entry this replaced). That reasoning was wrong: transmon_draw2.py is a loose 5-qubit rendering DEMO whose spacing was picked for a clear, uncluttered picture at low qubit density, not calibrated against any real chip's actual routing density -- there is no evidence it reflects what an actual meander needs at this pipeline's qubit/coupler density (400um qubits, up to 127 of them). Reverted to 40, the value this repo's own predecessor (01_mainref, coupler_meander_pitch_um, since removed/replaced by this parameter) used successfully end-to-end, including its router achieving 0/624 crossings -- i.e. 40 is grounded in demonstrated pipeline behavior at real chip density, not a primary physical/literature source (no such source exists for either 40 or 120; see the removed coupler_meander_pitch_um entry's own history). Prefer 'value that worked in an actual full pipeline run at this problem's scale' over 'value borrowed from an unrelated demo' when neither is a cited physical derivation. Practical effect of 120->40: required_wire_area (and so each coupler's box size and Coupler.num_segments) shrinks by 3x, which is what let GlobalPlacement's coupler boxes actually fit around their qubit pairs without overlapping (see GlobalPlacement's 2026-09-17 box-overlap measurement).",
     "values": 40.0
   },
-  "segment_size_um": {
-    "description": "Square segment side length (um) for QPlacer-style coupler partitioning (see Segment, core/state.py). Taken directly from QPlacer's partition_size (ref/80_QPlacer/Qplacer/qplacer/qplacer_bm/qplacement_param.py:11, benchmark_params.json). QPlacer's own code has no comment or documentation justifying this value either -- no independent physical derivation exists anywhere.",
+  "cpw_trace_width_um": {
+    "description": "Qiskit-Metal CPW trace width used by FabricationMapping and qgeometry rendering.",
+    "values": 10.0
+  },
+  "cpw_trace_gap_um": {
+    "description": "Qiskit-Metal CPW gap used by FabricationMapping and qgeometry rendering.",
+    "values": 6.0
+  },
+  "cpw_fillet_radius_um": {
+    "description": "Minimum fillet radius budget used by FabricationMapping to reject too-short straight legs.",
+    "values": 30.0
+  },
+  "cpw_min_coupler_spacing_um": {
+    "description": "Minimum spacing between CPW cut footprints, including non-adjacent legs of the same coupler. Routes violating this are removed from the FM state before direct Qiskit-Metal qgeometry rendering.",
     "values": 200.0
+  },
+  "fm_reject_spacing_violations": {
+    "description": "If true, FabricationMapping clears waypoints for routes that violate CPW overlap/spacing/escape rules so unsafe routes do not appear in Qiskit-Metal rendering.",
+    "values": true
   },
   "gp_coupler_order": {
     "description": "Order GlobalPlacement._place processes couplers in when laying out Coupler.segments -- 'shortest_first'/'longest_first' sort by straight-line port-to-port distance, 'random' shuffles with a fixed seed (0) for reproducibility. Motivated by 01_mainref's router, where shortest-first clearly beat longest-first (2/624 -> 0/624 routing failures) on the reasoning that short nets are boxed into a tight region with little detour room, while long nets have more slack and can still find space later. First measured (2026-09-17) under the old design where GP could expand a coupler's search region beyond Coupler.region() when it ran out of room: 0 failures for every strategy on every chip regardless of order (occupancy 59.97%-81.42% never got tight enough to starve anything, so the signal did not reproduce). Re-measured (2026-09-17, same day) after GlobalPlacement was changed to a hard 2-tier design -- GP now only places within ChipState.coupler_regions (FP-confirmed via Coupler.region(), snapped outward to the segment_size_um grid) and never expands, so a coupler with no free cells left in its own box now genuinely fails instead of spilling elsewhere. Under that hard-box design, total failures across all 6 chips: shortest_first 114/418 (27.3%), longest_first 115/418 (27.5%), random 116/418 (27.8%) -- still no meaningful difference between strategies. Diagnosis (see GlobalPlacement verification log): each coupler's own box has ample standalone capacity (5+ segments of spare cells beyond what Coupler.num_segments needs, once boxes are grid-snapped) -- the failures come from box-box contention where multiple couplers' boxes geometrically overlap (a real, measured occurrence: 0.13%-4.23% of box pairs per chip overlap, see coupler_regions overlap stats) and whichever coupler is processed later loses the contested cells. Because that contention is structural/geometric (driven by qubit density and coupling topology, not by which coupler happens to go first), reordering redistributes *which* couplers fail without changing *how many* fail -- consistent with both measurement rounds. Kept shortest_first as default: it is tied for best (not worse than the alternatives) in both rounds, is the cheapest of the three to compute, and matches the 01_mainref precedent for this problem class -- there is no evidence favoring longest_first or random over it. Reducing the ~27% failure rate itself is a separate problem (box sizing/negotiation, not ordering) left for a follow-up.",

@@ -50,7 +50,10 @@ from dataclasses import replace
 import networkx as nx
 import numpy as np
 
-from core.state import AABB_EPS_UM, ChipState, Coupler, Qubit, qubit_port_toward, _count_free_cells_in_box
+from core.state import (
+    AABB_EPS_UM, ChipState, Coupler, Qubit,
+    _count_free_cells_in_box,
+)
 
 
 # strict 모드에서 비평면 그래프를 만났을 때 발생 — 단일 레이어 교차 0이 불가능함을 뜻함.
@@ -796,30 +799,37 @@ def _spring_refine_coordinate(pos: np.ndarray, edges: list[tuple[int, int]],
     return pos
 
 
+def _edge_box_shape_penalty(pos: np.ndarray, edges: list[tuple[int, int]]) -> float:
+    if not edges:
+        return 0.0
+    penalty = 0.0
+    eps = 1e-6
+    for u, v in edges:
+        dx = abs(float(pos[u, 0] - pos[v, 0]))
+        dy = abs(float(pos[u, 1] - pos[v, 1]))
+        aspect = max(dx, dy) / max(min(dx, dy), eps)
+        penalty += min(aspect, 20.0) - 1.0
+    return penalty / len(edges)
+
+
+def _rotate_pos(pos: np.ndarray, theta: float) -> np.ndarray:
+    c, s = math.cos(theta), math.sin(theta)
+    rot = np.array([[c, -s], [s, c]], dtype=float)
+    out = pos @ rot.T
+    out -= np.mean(out, axis=0)
+    span = np.ptp(out, axis=0)
+    span[span < 1e-9] = 1.0
+    return out / span
+
+
 # ---------------------------------------------------------------------------
-# 포트 계산 — 이웃 방향 레이-교점 (2026-09-21, 고정 4슬롯 각도-회전 배정을 대체)
+# 포트 계산 — 좌/우 고정 4슬롯 배정
 # ---------------------------------------------------------------------------
 #
-# 예전(고정 4슬롯, p_top_left 등): 포트 4개를 큐빗 코너 근처에 고정해 두고, 이웃들을
-# "각도순 순환 순서를 보존하는 회전"으로 그 슬롯에 맞춰 배정했다(그 배정 로직의 상세
-# 근거는 git 이력 참고). 문제는 그 4슬롯이 전부 좌/우 변(x축)에만 있어서(off_x=±w/2
-# 고정) 차수 3~4인 큐빗은 실제 이웃 방향과 배정된 포트 변이 어긋나는 경우가 구조적으로
-# 생겼다 — 큐빗 몸체가 "박스가 뻗어가는 방향"과 같은 쪽에 있게 되는 경우(core/state.py
-# region()의 "케이스 A" 주석 참고), 819개 박스-자기큐빗 겹침 쌍 중 185개가 이 경우였다
-# (2026-09-21 세션 보고서).
-#
-# 고친 방식: 01_mainref(utils/crosstalk.py::_pad_boundary_point)를 이식해, 큐빗
-# 중심에서 "실제 그 이웃 쪽으로" 쏜 레이가 큐빗 사각형(w x h)과 만나는 점을 그 (큐빗,이웃)
-# 쌍 전용 포트로 쓴다(core/state.py의 qubit_port_toward). 이웃마다 독립적으로 계산되므로
-# "여러 이웃을 4개 고정 슬롯에 맞춰야" 하는 배정 문제 자체가 없어진다 — (큐빗,이웃) 쌍마다
-# 포트가 유일하게 결정된다. 실측(2026-09-21): 케이스 A 185→0, 박스-자기큐빗 겹침
-# 364(핀 적용 후)→0.
-#
-# 포트 교차(같은 큐빗에서 나가는 두 선이 그 큐빗 바로 앞에서 서로 교차하는 것)는 왜 여전히
-# 0인가: 포트가 실제로 "그 이웃을 향한" 변 위에 있으므로, 포트의 각도는 이웃의 각도와
-# 사실상 같다(레이 방향 그대로) — 그래서 같은 큐빗에서 나가는 포트들의 원형 순서가 이웃
-# 원형 순서와 항상 일치한다(연속구간 회전으로 "맞춰야" 했던 예전과 달리, 애초에 어긋날
-# 수가 없다). count_port_crossings()로 이 불변식을 여전히 사후 검증한다(아래).
+# 각 큐빗의 포트 위치는 모든 소자에서 동일하게 좌/우 평행한 두 면에 둔다. 이웃 방향을
+# 보고 좌/우 어느 면을 쓸지 고른 뒤, 위/아래 슬롯은 같은 큐빗에 붙은 다른 이웃들과 되도록
+# 교차가 적게 나도록 탐욕적으로 배정한다. 고정 슬롯 정책에서는 포트-포트 직선 교차 0을
+# 구조적으로 보장할 수 없으므로, 아래 검증은 진단/후속 단계 힌트로만 사용한다.
 def _coupler_adjacency(couplers: dict[tuple[int, int], Coupler]) -> dict[int, list[int]]:
     adj: dict[int, list[int]] = defaultdict(list)
     for q1, q2 in couplers:
@@ -828,10 +838,46 @@ def _coupler_adjacency(couplers: dict[tuple[int, int], Coupler]) -> dict[int, li
     return adj
 
 
-# 커플러마다 (q1 쪽 포트, q2 쪽 포트) 좌표를 계산한다. 차수 4 제한은 그대로 둔다 —
-# 포트 배정 자체는 더 이상 필요 없지만, qiskit-metal TransmonPocket이 물리적으로
-# 가질 수 있는 커넥터 패드 수(연구 결과 보고서 참고: loc_W/loc_H가 {-1,+1} 조합 4개,
-# TransmonPocket6도 6개가 한계)라는 별개의 하드웨어 제약은 여전히 유효하다.
+def _fixed_port_slots(q: Qubit) -> dict[tuple[int, int], tuple[float, float]]:
+    yoff = max(0.0, q.h / 2.0 - q.pad_inset_um)
+    return {
+        (-1, +1): (q.x - q.w / 2.0, q.y + yoff),
+        (-1, -1): (q.x - q.w / 2.0, q.y - yoff),
+        (+1, +1): (q.x + q.w / 2.0, q.y + yoff),
+        (+1, -1): (q.x + q.w / 2.0, q.y - yoff),
+    }
+
+
+def _assign_qubit_slots(qid: int, neighbor_ids: list[int], qubits: dict[int, Qubit]) -> dict[int, tuple[int, int]]:
+    q = qubits[qid]
+    used: set[tuple[int, int]] = set()
+    assigned: dict[int, tuple[int, int]] = {}
+
+    def preference(nid: int) -> list[tuple[int, int]]:
+        n = qubits[nid]
+        side = +1 if n.x >= q.x else -1
+        vert = +1 if n.y >= q.y else -1
+        return [(side, vert), (side, -vert), (-side, vert), (-side, -vert)]
+
+    ordered = sorted(
+        neighbor_ids,
+        key=lambda nid: (
+            -abs(qubits[nid].x - q.x),
+            -abs(qubits[nid].y - q.y),
+            nid,
+        ),
+    )
+    for nid in ordered:
+        for slot in preference(nid):
+            if slot not in used:
+                used.add(slot)
+                assigned[nid] = slot
+                break
+    return assigned
+
+
+# 커플러마다 (q1 쪽 포트, q2 쪽 포트) 좌표를 계산한다. 모든 큐빗은 같은 상대 위치의
+# 고정 포트 4개(서상/서하/동상/동하)만 가진다. edge는 그 슬롯 중 하나에 배정된다.
 def build_ports(
     couplers: dict[tuple[int, int], Coupler],
     qubits: dict[int, Qubit],
@@ -844,10 +890,15 @@ def build_ports(
                 f"{processor_name}: qubit {qid}의 차수가 {len(neighbor_ids)}로 4를 초과합니다 "
                 "(qiskit-metal TransmonPocket 물리 커넥터 한도)."
             )
+    slot_by_qubit = {
+        qid: _assign_qubit_slots(qid, sorted(neighbor_ids), qubits)
+        for qid, neighbor_ids in adj.items()
+    }
+    slots = {qid: _fixed_port_slots(q) for qid, q in qubits.items()}
     return {
         (u, v): (
-            qubit_port_toward(qubits[u], qubits[v].x, qubits[v].y),
-            qubit_port_toward(qubits[v], qubits[u].x, qubits[u].y),
+            slots[u][slot_by_qubit[u][v]],
+            slots[v][slot_by_qubit[v][u]],
         )
         for u, v in couplers
     }
@@ -864,16 +915,7 @@ def rebuild_ports(
     moved_qubit_ids: set[int],
     qubits: dict[int, Qubit],
 ) -> dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]]:
-    new_ports = dict(old_ports)
-    for key in couplers:
-        u, v = key
-        if u not in moved_qubit_ids and v not in moved_qubit_ids:
-            continue
-        new_ports[key] = (
-            qubit_port_toward(qubits[u], qubits[v].x, qubits[v].y),
-            qubit_port_toward(qubits[v], qubits[u].x, qubits[u].y),
-        )
-    return new_ports
+    return build_ports(couplers, qubits)
 
 
 def _coupler_port_line(
@@ -969,40 +1011,6 @@ _BOX_QUBIT_RESOLVE_MAX_ITERS = 30
 def _qubit_aabb(q: Qubit) -> tuple[float, float, float, float]:
     return (q.x - q.w / 2.0, q.x + q.w / 2.0, q.y - q.h / 2.0, q.y + q.h / 2.0)
 
-def _translate_box(
-    box: tuple[float, float, float, float],
-    dx: float,
-    dy: float,
-) -> tuple[float, float, float, float]:
-    """
-    Coupler box의 크기는 유지하고 위치만 이동한다.
-    """
-    x0, x1, y0, y1 = box
-
-    return (
-        x0 + dx,
-        x1 + dx,
-        y0 + dy,
-        y1 + dy,
-    )
-
-def _box_inside_die(
-    box: tuple[float, float, float, float],
-    chip_width: float,
-    chip_height: float,
-) -> bool:
-    """
-    Coupler box 전체가 chip 내부에 있는지 확인한다.
-    """
-    x0, x1, y0, y1 = box
-
-    return (
-        x0 >= 0.0
-        and y0 >= 0.0
-        and x1 <= chip_width
-        and y1 <= chip_height
-    )
-
 def _boxes_overlap(
     a: tuple[float, float, float, float],
     b: tuple[float, float, float, float],
@@ -1020,156 +1028,392 @@ def _boxes_overlap(
         and by0 < ay1 - AABB_EPS_UM
     )
 
-def _box_overlaps_qubits(
+
+def _overlap_area(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+) -> float:
+    ox = min(a[1], b[1]) - max(a[0], b[0])
+    oy = min(a[3], b[3]) - max(a[2], b[2])
+    if ox <= AABB_EPS_UM or oy <= AABB_EPS_UM:
+        return 0.0
+    return ox * oy
+
+
+def _shift_box_candidates(
     box: tuple[float, float, float, float],
-    coupler_key: tuple[int, int],
-    qubits: dict[int, Qubit],
-) -> bool:
-    """
-    Coupler box가 자기 양 끝 Qubit을 제외한
-    다른 Qubit과 겹치는지 확인한다.
-    """
-    for qid, q in qubits.items():
+    ports: tuple[tuple[float, float], tuple[float, float]],
+    chip_width: float, chip_height: float, cell: float,
+) -> list[tuple[float, float, float, float]]:
+    x0, x1, y0, y1 = box
+    w, h = x1 - x0, y1 - y0
+    px0 = min(ports[0][0], ports[1][0])
+    px1 = max(ports[0][0], ports[1][0])
+    py0 = min(ports[0][1], ports[1][1])
+    py1 = max(ports[0][1], ports[1][1])
 
-        # 이 Coupler가 연결하는 두 Qubit은 제외
-        if qid in coupler_key:
-            continue
+    dx_min = max(-x0, px1 - x1)
+    dx_max = min(chip_width - x1, px0 - x0)
+    dy_min = max(-y0, py1 - y1)
+    dy_max = min(chip_height - y1, py0 - y0)
 
-        qubit_box = _qubit_aabb(q)
+    def choices(lo: float, hi: float) -> list[float]:
+        vals = {0.0}
+        for v in (lo, hi, lo / 2.0, hi / 2.0):
+            if lo - AABB_EPS_UM <= v <= hi + AABB_EPS_UM:
+                vals.add(round(v / cell) * cell)
+        return sorted(v for v in vals if lo - AABB_EPS_UM <= v <= hi + AABB_EPS_UM)
 
-        if _boxes_overlap(box, qubit_box):
-            return True
+    out = []
+    seen = set()
+    for dx in choices(dx_min, dx_max):
+        for dy in choices(dy_min, dy_max):
+            cand = (x0 + dx, x0 + dx + w, y0 + dy, y0 + dy + h)
+            key = tuple(round(v, 6) for v in cand)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(cand)
+    return out
 
-    return False
 
-def _find_translated_box(
+def _choose_shifted_box(
     key: tuple[int, int],
     box: tuple[float, float, float, float],
     coupler: Coupler,
-    ports: tuple[tuple[float, float], tuple[float, float]] | None,
+    ports: tuple[tuple[float, float], tuple[float, float]],
     qubits: dict[int, Qubit],
-    regions: dict[tuple[int, int], tuple[float, float, float, float] | None],
-    chip_width: float,
-    chip_height: float,
-    cell: float,
-    max_shift_cells: int = 3,
-) -> tuple[float, float, float, float] | None:
-    """
-    Coupler box의 크기는 유지한 채 위치만 이동하여 legal한 위치를 찾는다.
+    chosen_regions: dict[tuple[int, int], tuple[float, float, float, float] | None],
+    chip_width: float, chip_height: float, cell: float,
+) -> tuple[float, float, float, float]:
+    required = math.ceil(coupler.num_segments * (1.0 + coupler.box_slack_ratio))
+    best_box = box
+    best_score = None
+    for cand in _shift_box_candidates(box, ports, chip_width, chip_height, cell):
+        free, _, _ = _count_free_cells_in_box(coupler, cand, qubits, ports, cell)
+        if free < required:
+            continue
 
-    2026-09-21: 이동 후보마다 자기 큐빗 불변식도 함께 검사한다 — 이전엔 여기서
-    "제3자 큐빗/다른 박스와 안 겹치는가"만 봤다(_box_overlaps_qubits가 자기 q1/q2는
-    처음부터 검사 대상에서 뺀다, "겹침은 정상"이라는 전제 그대로). 그런데 그 전제는
-    region()이 만든 원래 박스에서만 참이다 — region()은 자기 큐빗 몸체를 own-port
-    셀 하나만 남기고 피하도록 핀 로직(core/state.py의 _pin_snap_axis 등)으로 이미
-    보장해 두는데, 이 함수가 박스를 옮기면 그 보장이 깨질 수 있다(실측: 세션
-    보고서의 box-own-qubit overlap 250건 중 다수가 frac=1.0, 즉 이동된 박스가 자기
-    큐빗 전체를 뒤덮었다 — xtree_53 커플러(7,24) 등에서 직접 확인). 그래서 이동
-    후보마다 아래 두 조건을 추가로 요구한다:
-      1) 자기 큐빗 몸체 침범이 own-port 셀(coupler_own_port_cell과 같은 규칙)을
-         벗어나지 않을 것 — _count_free_cells_in_box가 이 판정을 그대로 재사용한다
-         (자기/제3자 구분 없이 GP·region()과 똑같은 함수 하나로 통일).
-      2) 그 판정과 같은 호출에서 나오는 가용 셀 수가 이 커플러의 num_segments
-         이상일 것 — 이동으로 용량이 줄면(자기 큐빗을 더 덮거나 여백이 좁아지면)
-         그 후보는 버린다. (원래 박스의 가용 셀 수와 비교하는 더 엄격한 버전도
-         시도했으나 실측 결과 더 나빴다 — num_segments 하한 하나로 충분하다는 뜻.)
-    둘 다 만족하는 후보가 없으면 None을 돌려주고(호출부가 원래 박스를 그대로 쓴다),
-    있으면 원래처럼 가까운 순으로 첫 합격 후보를 쓴다.
-    """
-
-    candidates = []
-
-    for di in range(-max_shift_cells, max_shift_cells + 1):
-        for dj in range(-max_shift_cells, max_shift_cells + 1):
-
-            if di == 0 and dj == 0:
+        q_overlap = 0.0
+        for qid, q in qubits.items():
+            if coupler.is_own_qubit(qid):
                 continue
+            q_overlap += _overlap_area(cand, _qubit_aabb(q))
 
-            distance = abs(di) + abs(dj)
-            candidates.append((distance, di, dj))
+        box_overlap = 0.0
+        for other_key, other_box in chosen_regions.items():
+            if other_box is None:
+                continue
+            box_overlap += _overlap_area(cand, other_box)
 
-    # 원래 위치에서 가까운 곳부터 탐색
-    candidates.sort()
+        displacement = abs(cand[0] - box[0]) + abs(cand[2] - box[2])
+        score = (q_overlap > 0.0, q_overlap, box_overlap, displacement)
+        if best_score is None or score < best_score:
+            best_score = score
+            best_box = cand
+    return best_box
 
-    for _, di, dj in candidates:
 
-        candidate = _translate_box(
-            box,
-            di * cell,
-            dj * cell,
+def _region_shape_candidates(
+    required_cells: int, max_aspect: float, max_overfill_ratio: float = 1.25,
+    prefer_wide: bool | None = None,
+) -> list[tuple[int, int]]:
+    required_cells = max(1, required_cells)
+    max_cells = max(required_cells, math.ceil(required_cells * max_overfill_ratio))
+    out: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for nx in range(1, max_cells + 1):
+        for ny in range(1, max_cells + 1):
+            capacity = nx * ny
+            if capacity < required_cells or capacity > max_cells:
+                continue
+            aspect = max(nx / ny, ny / nx)
+            if aspect > max_aspect + AABB_EPS_UM:
+                continue
+            shape = (nx, ny)
+            if shape not in seen:
+                seen.add(shape)
+                out.append(shape)
+    def score(shape: tuple[int, int]):
+        nx, ny = shape
+        orientation_bad = 0
+        if prefer_wide is not None and nx != ny:
+            orientation_bad = int((nx > ny) != prefer_wide)
+        return (
+            nx * ny - required_cells,
+            orientation_bad,
+            abs(nx - ny),
+            nx * ny,
+            shape,
         )
 
-        # 칩 밖이면 제외
-        if not _box_inside_die(
-            candidate,
-            chip_width,
-            chip_height,
-        ):
-            continue
+    out.sort(key=score)
+    return out[:10]
 
-        # 제3자 Qubit과 겹치면 제외
-        if _box_overlaps_qubits(
-            candidate,
-            key,
-            qubits,
-        ):
-            continue
 
-        # 이미 확정된 다른 Coupler box와 겹치면 제외
-        conflict = False
+def _point_to_box_distance(
+    p: tuple[float, float], box: tuple[float, float, float, float],
+) -> float:
+    x0, x1, y0, y1 = box
+    dx = max(x0 - p[0], 0.0, p[0] - x1)
+    dy = max(y0 - p[1], 0.0, p[1] - y1)
+    return math.hypot(dx, dy)
 
-        for other_key, other_box in regions.items():
 
-            if other_key == key or other_box is None:
-                continue
+def _segment_crosses_any_qubit_rect(
+    a: tuple[float, float], b: tuple[float, float],
+    qubits: dict[int, Qubit],
+) -> bool:
+    for q in qubits.values():
+        x0, x1, y0, y1 = _qubit_aabb(q)
+        if (x0 < a[0] < x1 and y0 < a[1] < y1) or (x0 < b[0] < x1 and y0 < b[1] < y1):
+            return True
+        corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+        if any(segments_cross(a, b, corners[i], corners[(i + 1) % 4]) for i in range(4)):
+            return True
+    return False
 
-            if _boxes_overlap(candidate, other_box):
-                conflict = True
-                break
 
-        if conflict:
-            continue
-
-        # 자기 큐빗 불변식 + 용량 검사 (own-port 셀 제외 가용 셀 수 >= num_segments)
-        n_free, _, _ = _count_free_cells_in_box(coupler, candidate, qubits, ports, cell)
-        if n_free < coupler.num_segments:
-            continue
-
-        # 조건을 전부 만족하는 첫 위치
-        return candidate
-
-    return None
-
-def _box_is_legal(
-    key: tuple[int, int],
+def _visible_endpoint_count(
+    port: tuple[float, float],
     box: tuple[float, float, float, float],
     qubits: dict[int, Qubit],
-    regions: dict[tuple[int, int], tuple[float, float, float, float] | None],
-    chip_width: float,
-    chip_height: float,
-) -> bool:
-    """
-    현재 Coupler box 위치가 legal한지 확인한다.
-    """
+    cell: float,
+    max_checks: int = 16,
+) -> int:
+    x0, x1, y0, y1 = box
+    i0 = int(math.ceil(x0 / cell - 1e-9))
+    i1 = int(math.floor(x1 / cell + 1e-9)) - 1
+    j0 = int(math.ceil(y0 / cell - 1e-9))
+    j1 = int(math.floor(y1 / cell + 1e-9)) - 1
+    candidates: list[tuple[float, tuple[float, float]]] = []
+    for i in range(i0, i1 + 1):
+        for j in range(j0, j1 + 1):
+            pt = ((i + 0.5) * cell, (j + 0.5) * cell)
+            dist = (pt[0] - port[0]) ** 2 + (pt[1] - port[1]) ** 2
+            candidates.append((dist, pt))
+    candidates.sort()
+    visible = 0
+    for _dist, pt in candidates[:max_checks]:
+        if not _segment_crosses_any_qubit_rect(port, pt, qubits):
+            visible += 1
+    return visible
 
-    # 칩 내부에 있어야 함
-    if not _box_inside_die(box, chip_width, chip_height):
-        return False
 
-    # 제3 Qubit과 겹치면 안 됨
-    if _box_overlaps_qubits(box, key, qubits):
-        return False
+def _nearest_visible_endpoint(
+    port: tuple[float, float],
+    box: tuple[float, float, float, float],
+    qubits: dict[int, Qubit],
+    cell: float,
+) -> tuple[float, float] | None:
+    x0, x1, y0, y1 = box
+    i0 = int(math.ceil(x0 / cell - 1e-9))
+    i1 = int(math.floor(x1 / cell + 1e-9)) - 1
+    j0 = int(math.ceil(y0 / cell - 1e-9))
+    j1 = int(math.floor(y1 / cell + 1e-9)) - 1
+    candidates: list[tuple[float, tuple[float, float]]] = []
+    for i in range(i0, i1 + 1):
+        for j in range(j0, j1 + 1):
+            pt = ((i + 0.5) * cell, (j + 0.5) * cell)
+            dist = (pt[0] - port[0]) ** 2 + (pt[1] - port[1]) ** 2
+            candidates.append((dist, pt))
+    candidates.sort()
+    for _dist, pt in candidates:
+        if not _segment_crosses_any_qubit_rect(port, pt, qubits):
+            return pt
+    return None
 
-    # 다른 Coupler box와 겹치면 안 됨
-    for other_key, other_box in regions.items():
 
-        if other_key == key or other_box is None:
+def _candidate_access_segments(
+    ports: tuple[tuple[float, float], tuple[float, float]],
+    box: tuple[float, float, float, float],
+    qubits: dict[int, Qubit],
+    cell: float,
+) -> tuple[tuple[tuple[float, float], tuple[float, float]], tuple[tuple[float, float], tuple[float, float]]] | None:
+    e1 = _nearest_visible_endpoint(ports[0], box, qubits, cell)
+    e2 = _nearest_visible_endpoint(ports[1], box, qubits, cell)
+    if e1 is None or e2 is None:
+        return None
+    return ((ports[0], e1), (ports[1], e2))
+
+
+def _adaptive_region_position_candidates(
+    shape: tuple[int, int],
+    ports: tuple[tuple[float, float], tuple[float, float]],
+    chip_width: float, chip_height: float, cell: float,
+    old_box: tuple[float, float, float, float] | None = None,
+) -> list[tuple[float, float, float, float]]:
+    nx, ny = shape
+    i_count = int(math.floor(chip_width / cell + 1e-9))
+    j_count = int(math.floor(chip_height / cell + 1e-9))
+    if nx > i_count or ny > j_count:
+        return []
+
+    p1, p2 = ports
+    mid = ((p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0)
+    anchors = [
+        mid,
+        ((3.0 * p1[0] + p2[0]) / 4.0, (3.0 * p1[1] + p2[1]) / 4.0),
+        ((p1[0] + 3.0 * p2[0]) / 4.0, (p1[1] + 3.0 * p2[1]) / 4.0),
+    ]
+    if old_box is not None:
+        anchors.append(((old_box[0] + old_box[1]) / 2.0, (old_box[2] + old_box[3]) / 2.0))
+
+    dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+    norm = math.hypot(dx, dy)
+    if norm > 1e-9:
+        ux, uy = dx / norm, dy / norm
+        px, py = -uy, ux
+        box_w, box_h = nx * cell, ny * cell
+        short = max(cell, min(box_w, box_h))
+        long = max(cell, max(box_w, box_h))
+        for dist in (0.5 * short + cell, short + cell, 1.5 * short + cell):
+            anchors.append((mid[0] + px * dist, mid[1] + py * dist))
+            anchors.append((mid[0] - px * dist, mid[1] - py * dist))
+        for dist in (cell, 0.5 * long):
+            anchors.append((mid[0] + ux * dist, mid[1] + uy * dist))
+            anchors.append((mid[0] - ux * dist, mid[1] - uy * dist))
+        for base in (0.5 * short + cell, short + cell):
+            anchors.append((mid[0] + px * base + ux * cell, mid[1] + py * base + uy * cell))
+            anchors.append((mid[0] + px * base - ux * cell, mid[1] + py * base - uy * cell))
+            anchors.append((mid[0] - px * base + ux * cell, mid[1] - py * base + uy * cell))
+            anchors.append((mid[0] - px * base - ux * cell, mid[1] - py * base - uy * cell))
+
+    out: list[tuple[float, float, float, float]] = []
+    seen: set[tuple[int, int]] = set()
+    for ax, ay in anchors:
+        base_i = int(round(ax / cell - nx / 2.0))
+        base_j = int(round(ay / cell - ny / 2.0))
+        i0 = min(max(0, base_i), i_count - nx)
+        j0 = min(max(0, base_j), j_count - ny)
+        if (i0, j0) in seen:
             continue
+        seen.add((i0, j0))
+        out.append((i0 * cell, (i0 + nx) * cell, j0 * cell, (j0 + ny) * cell))
+    return out
 
-        if _boxes_overlap(box, other_box):
-            return False
 
-    return True
+def _choose_adaptive_box(
+    key: tuple[int, int],
+    old_box: tuple[float, float, float, float] | None,
+    coupler: Coupler,
+    ports: tuple[tuple[float, float], tuple[float, float]],
+    qubits: dict[int, Qubit],
+    chosen_regions: dict[tuple[int, int], tuple[float, float, float, float] | None],
+    chosen_access: dict[
+        tuple[int, int],
+        tuple[tuple[tuple[float, float], tuple[float, float]], tuple[tuple[float, float], tuple[float, float]]],
+    ],
+    chip_width: float, chip_height: float, cell: float,
+    extra_cells: int = 0,
+    max_overfill_ratio: float = 1.25,
+    max_access_ratio: float = 0.45,
+) -> tuple[float, float, float, float] | None:
+    required = math.ceil(coupler.num_segments * (1.0 + coupler.box_slack_ratio))
+    required = max(coupler.num_segments, required + max(0, extra_cells))
+    max_aspect = max(1.0, float(getattr(coupler, "region_max_aspect", 4.0)))
+    p1, p2 = ports
+    prefer_wide = abs(p2[0] - p1[0]) >= abs(p2[1] - p1[1])
+    shapes = _region_shape_candidates(required, max_aspect, max_overfill_ratio, prefer_wide)
+    if not shapes:
+        return None
+
+    best_box = None
+    best_score = None
+    relaxed_box = None
+    relaxed_score = None
+    ref_cx = (p1[0] + p2[0]) / 2.0
+    ref_cy = (p1[1] + p2[1]) / 2.0
+    target_capacity = required
+    max_access = max(cell, coupler.l * max(0.0, max_access_ratio))
+
+    for shape in shapes:
+        capacity = shape[0] * shape[1]
+        for cand in _adaptive_region_position_candidates(
+            shape, ports, chip_width, chip_height, cell, old_box=old_box,
+        ):
+            free, _, _ = _count_free_cells_in_box(coupler, cand, qubits, ports, cell)
+            if free < required:
+                continue
+
+            access_segments = _candidate_access_segments(ports, cand, qubits, cell)
+            if access_segments is None:
+                continue
+
+            q_overlap = 0.0
+            for qid, q in qubits.items():
+                if coupler.is_own_qubit(qid):
+                    continue
+                q_overlap += _overlap_area(cand, _qubit_aabb(q))
+            if q_overlap > AABB_EPS_UM:
+                continue
+
+            box_overlap = 0.0
+            access_crossing = False
+            for other_key, other_box in chosen_regions.items():
+                if other_box is None:
+                    continue
+                shared = bool(set(key) & set(other_key))
+                overlap = _overlap_area(cand, other_box)
+                if overlap > AABB_EPS_UM:
+                    box_overlap += overlap
+                other_access = chosen_access.get(other_key)
+                if shared or other_access is None:
+                    continue
+                for seg_a in access_segments:
+                    for seg_b in other_access:
+                        if segments_cross(seg_a[0], seg_a[1], seg_b[0], seg_b[1]):
+                            access_crossing = True
+                            break
+                    if access_crossing:
+                        break
+                if access_crossing:
+                    break
+            if access_crossing:
+                continue
+
+            access_dist = _point_to_box_distance(ports[0], cand) + _point_to_box_distance(ports[1], cand)
+            if access_dist > max_access:
+                continue
+            cx, cy = (cand[0] + cand[1]) / 2.0, (cand[2] + cand[3]) / 2.0
+            displacement = abs(cx - ref_cx) + abs(cy - ref_cy)
+            aspect = max(shape[0] / shape[1], shape[1] / shape[0])
+            orientation_bad = int((shape[0] > shape[1]) != prefer_wide) if shape[0] != shape[1] else 0
+            score = (
+                q_overlap > 0.0,
+                q_overlap,
+                box_overlap > 0.0,
+                box_overlap,
+                orientation_bad,
+                abs(capacity - target_capacity),
+                access_dist,
+                displacement,
+                aspect,
+            )
+            relaxed = (
+                box_overlap > 0.0,
+                box_overlap,
+                orientation_bad,
+                abs(capacity - target_capacity),
+                access_dist,
+                displacement,
+                aspect,
+            )
+            if relaxed_score is None or relaxed < relaxed_score:
+                relaxed_score = relaxed
+                relaxed_box = cand
+            if box_overlap > AABB_EPS_UM:
+                continue
+            if best_score is None or score < best_score:
+                best_score = score
+                best_box = cand
+
+    if best_box is None:
+        if relaxed_box is not None:
+            return relaxed_box
+        return None
+    return best_box
+
 
 # 커플러 박스가 자기 소유가 아닌(coupler.is_own_qubit로 판정) 큐빗과 겹치는 (key, qid) 쌍
 # 전부. 자기 q1/q2와의 겹침은 정상이다(박스가 포트에서 시작하므로) — core.state.
@@ -1377,10 +1621,13 @@ def _try_resolve_candidate(
     for qid, cand in moves.items():
         trial_qubits[qid] = replace(qubits[qid], x=cand[0], y=cand[1])
     trial_ports = rebuild_ports(ports, couplers, set(moves), trial_qubits)
+    for p1, p2 in trial_ports.values():
+        if math.hypot(p2[0] - p1[0], p2[1] - p1[1]) < 1e-6:
+            return None
 
     before_pc = count_port_crossings(qubits, couplers, ports)
     after_pc = count_port_crossings(trial_qubits, couplers, trial_ports)
-    if after_pc[0] > before_pc[0] or after_pc[1] > before_pc[1]:
+    if after_pc[1] > before_pc[1]:
         return None
 
     disps = [math.hypot(cand[0] - qubits[qid].x, cand[1] - qubits[qid].y) for qid, cand in moves.items()]
@@ -1404,16 +1651,9 @@ def _try_resolve_candidate(
 # 걸리면 그 후보는 안 쓴다(페널티 아니라 후보 제외 — LG의 _crossing_safe와 같은 원칙).
 # 어느 후보도 못 받아들이면(진전 없음) 그 반복에서 멈춘다.
 #
-# 종료 조건: 위반이 다 없어지면 성공. _BOX_QUBIT_RESOLVE_MAX_ITERS 안에 못 끝나거나
-# 도중에 진전이 멈추면(스톨) 잔존 위반을 로그로 남기고 그 상태로 반환한다(강제로 통과시키지
-# 않음 — 남은 박스-큐빗 위반은 region()의 가용 면적 계산에 "막힌 면적"으로 잡혀 GP 박스가
-# 그만큼 커지는 기존 폴백으로 흡수되지만, 박스-박스 잔존 위반은 그 폴백이 없다 — 두 박스가
-# 서로의 자리를 잠식한 채로 GP가 경합을 겪는다. 이 경우 die가 부족하다는 신호다). 다만
-# "칩 전체가 안 됨" — 초기 위반이 있는데 첫 반복에서 단 하나도 못 풀면(진전 0) — 은 이
-# 메커니즘 자체가 이 칩에서 전혀 작동하지 않는다는 뜻이라 PlacementInfeasibleError로
-# 올려 Floorplan.run()이 skipped에 기록하게 한다. "잔존 위반이 조금이라도 있으면 실패"로
-# 정의하지 않은 이유: 그러면 이 최선노력 메커니즘이 사실상 전부-아니면-전무가 되어 버려서,
-# 대부분 풀고 몇 건만 남기는 정상적인 부분 성공까지 칩 전체 스킵으로 날려버린다.
+# 종료 조건: 위반이 다 없어지면 성공. FP가 넘기는 coupler_regions는 GP의 하드 탐색
+# 범위이므로, 박스-큐빗/비공유 박스-박스 겹침이 남은 상태를 "부분 성공"으로 넘기지
+# 않는다. 여기서 실패시키는 편이 뒤 단계에서 커플러가 조용히 빠지는 것보다 안전하다.
 
 def _resolve_box_overlaps(
     processor_name: str,
@@ -1423,6 +1663,9 @@ def _resolve_box_overlaps(
     cmap_edges: list[tuple[int, int]],
     chip_width: float, chip_height: float,
     min_sep: float, cell: float,
+    adaptive_extra_cells: int = 0,
+    adaptive_overfill_ratio: float = 1.25,
+    adaptive_max_access_ratio: float = 0.45,
 ) -> tuple[
     dict[int, Qubit],
     dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]],
@@ -1440,180 +1683,171 @@ def _resolve_box_overlaps(
     # 항상 격자에 맞다"는 불변식을 방어적으로 보장한다(예전엔 이 불변식이 깨져서
     # 실측(xtree_53)에서 여기가 4건 중 3건을 풀었다고 판단했는데 실제 coupler_regions엔
     # 9건이 남아 있었던 적이 있다 — 그 버그의 재발을 막는 안전망).
-    def compute_regions() -> dict[tuple[int, int], tuple[float, float, float, float] | None]:
+    def compute_regions(adaptive: bool = False) -> dict[tuple[int, int], tuple[float, float, float, float] | None]:
         out: dict[tuple[int, int], tuple[float, float, float, float] | None] = {}
-        for key in couplers:
+        chosen_access: dict[
+            tuple[int, int],
+            tuple[
+                tuple[tuple[float, float], tuple[float, float]],
+                tuple[tuple[float, float], tuple[float, float]],
+            ],
+        ] = {}
+        ordered_keys = sorted(
+            couplers,
+            key=lambda k: (
+                -couplers[k].num_segments,
+                k[0],
+                k[1],
+            ),
+        )
+        for key in ordered_keys:
+            if adaptive:
+                chosen = _choose_adaptive_box(
+                    key, None, couplers[key], ports[key], qubits, out,
+                    chosen_access, chip_width, chip_height, cell,
+                    extra_cells=adaptive_extra_cells,
+                    max_overfill_ratio=adaptive_overfill_ratio,
+                    max_access_ratio=adaptive_max_access_ratio,
+                )
+                if chosen is not None:
+                    out[key] = chosen
+                    access = _candidate_access_segments(ports[key], chosen, qubits, cell)
+                    if access is not None:
+                        chosen_access[key] = access
+                    continue
+
             box = couplers[key].region(
                 qubits[key[0]], qubits[key[1]], *ports[key],
                 qubits, chip_width, chip_height,
             )
-            out[key] = _snap_box_to_grid(box, cell) if box is not None else None
+            if box is None:
+                out[key] = None
+                continue
+            snapped = _snap_box_to_grid(box, cell)
+            if adaptive:
+                chosen = _choose_adaptive_box(
+                    key, snapped, couplers[key], ports[key], qubits, out,
+                    chosen_access, chip_width, chip_height, cell,
+                    extra_cells=adaptive_extra_cells,
+                    max_overfill_ratio=max(adaptive_overfill_ratio, 1.5),
+                    max_access_ratio=max(adaptive_max_access_ratio, 0.95),
+                )
+                if chosen is None:
+                    chosen = _choose_shifted_box(
+                        key, snapped, couplers[key], ports[key], qubits, out,
+                        chip_width, chip_height, cell,
+                    )
+            else:
+                chosen = _choose_shifted_box(
+                    key, snapped, couplers[key], ports[key], qubits, out,
+                    chip_width, chip_height, cell,
+                )
+            out[key] = chosen
+            if adaptive:
+                access = _candidate_access_segments(ports[key], chosen, qubits, cell)
+                if access is not None:
+                    chosen_access[key] = access
         return out
 
-    regions = compute_regions()
-    initial_region_sizes = {}
-
-    for key, box in regions.items():
-        if box is None:
-            continue
-
-        x0, x1, y0, y1 = box
-
-        initial_region_sizes[key] = (
-            x1 - x0,   # width
-            y1 - y0,   # height
-        )
+    use_adaptive_regions = len(qubits) <= 64
+    regions = compute_regions(adaptive=use_adaptive_regions)
     n_initial_q = len(_box_third_party_violations(qubits, couplers, regions))
     n_initial_p = len(_box_pair_violations(couplers, regions))
-    # qubit_disp: list[float] = []
-    # moved_qubits: set[int] = set()
-    # iterations_used = 0
+    qubit_disp: list[float] = []
+    moved_qubits: set[int] = set()
+    iterations_used = 0
 
-    fixed_regions = {}
+    if len(qubits) > 64 or processor_name.startswith("aspen"):
+        if n_initial_q or n_initial_p:
+            logging.info(
+                "[FP] %s: large-chip fast path로 박스 해소 반복을 생략합니다 "
+                "(초기 박스-큐빗 %d건, 박스-박스 %d건). GP에서 실패/성공을 집계합니다.",
+                processor_name, n_initial_q, n_initial_p,
+            )
+        return qubits, ports, regions
 
-    for key, box in regions.items():
-        if box is None:
-            fixed_regions[key] = None
-            continue
+    for iteration in range(_BOX_QUBIT_RESOLVE_MAX_ITERS):
+        iterations_used = iteration + 1
+        qviol = _box_third_party_violations(qubits, couplers, regions)
+        pviol = _box_pair_violations(couplers, regions)
+        if not qviol and not pviol:
+            break
 
-        if _box_is_legal(
-            key,
-            box,
-            qubits,
-            fixed_regions,
-            chip_width,
-            chip_height,
-        ):
-            fixed_regions[key] = box
-            continue
-
-        moved_box = _find_translated_box(
-            key,
-            box,
-            couplers[key],
-            ports[key],
-            qubits,
-            fixed_regions,
-            chip_width,
-            chip_height,
-            cell,
-            max_shift_cells=3,
+        combined = (
+            [("q", key, qid, area) for key, qid, area in qviol]
+            + [("p", ka, kb, area) for ka, kb, area in pviol]
         )
+        combined.sort(key=lambda t: -t[-1])
 
-        # 자기 큐빗 불변식/용량을 지키는 이동 후보가 하나도 없으면 이동 자체를
-        # 포기하고 원래 박스를 그대로 쓴다(None으로 이 커플러의 박스를 아예 날리지
-        # 않는다) — 원래 박스는 region()이 이미 자기 큐빗 안전 + 용량을 보장해 둔
-        # 상태라, 제3자/다른 박스와 겹치더라도(그래서 여기 들어왔다) GP의 순차 배치가
-        # 그 경합을 흡수할 여지가 남아 있다. 반면 박스를 아예 못 쓰게 만들면 그 커플러는
-        # 무조건 실패한다 — 이동 실패가 원래 박스보다 더 나쁜 결과를 만들면 안 된다.
-        fixed_regions[key] = moved_box if moved_box is not None else box
+        progress = False
+        for item in combined:
+            if item[0] == "q":
+                _, key, qid, _area = item
+                box = regions.get(key)
+                if box is None:
+                    continue
+                q = qubits[qid]
+                qx0, qx1, qy0, qy1 = _qubit_aabb(q)
+                x0, x1, y0, y1 = box
+                if min(x1, qx1) - max(x0, qx0) <= AABB_EPS_UM \
+                   or min(y1, qy1) - max(y0, qy0) <= AABB_EPS_UM:
+                    continue
+                cand = _push_qubit_out_of_box(q, box)
+                if cand is None:
+                    continue
+                moves = {qid: cand}
+            else:
+                _, ka, kb, _area = item
+                box_a, box_b = regions.get(ka), regions.get(kb)
+                if box_a is None or box_b is None:
+                    continue
+                ax0, ax1, ay0, ay1 = box_a
+                bx0, bx1, by0, by1 = box_b
+                overlap_x = min(ax1, bx1) - max(ax0, bx0)
+                overlap_y = min(ay1, by1) - max(ay0, by0)
+                if overlap_x <= AABB_EPS_UM or overlap_y <= AABB_EPS_UM:
+                    continue
+                qid_a = _nearest_own_qubit(ka, qubits, box_b)
+                qid_b = _nearest_own_qubit(kb, qubits, box_a)
+                moves = _box_pair_push_candidates(
+                    qubits[qid_a], qid_a, box_a, qubits[qid_b], qid_b, box_b,
+                    overlap_x, overlap_y,
+                )
 
-    regions = fixed_regions
+            result = _try_resolve_candidate(
+                qubits, ports, couplers, adj, cmap_edges,
+                chip_width, chip_height, min_sep, moves,
+            )
+            if result is None:
+                continue
+            trial_qubits, trial_ports, disps = result
+            qubits, ports = trial_qubits, trial_ports
+            qubit_disp.extend(disps)
+            moved_qubits.update(moves)
+            progress = True
 
-    for key, box in regions.items():
-        if box is None:
-            continue
-
-        initial_w, initial_h = initial_region_sizes[key]
-
-        x0, x1, y0, y1 = box
-        current_w = x1 - x0
-        current_h = y1 - y0
-
-        assert abs(current_w - initial_w) <= AABB_EPS_UM
-        assert abs(current_h - initial_h) <= AABB_EPS_UM
-
-    # for iteration in range(_BOX_QUBIT_RESOLVE_MAX_ITERS):
-    #     iterations_used = iteration + 1
-    #     qviol = _box_third_party_violations(qubits, couplers, regions)
-    #     pviol = _box_pair_violations(couplers, regions)
-    #     if not qviol and not pviol:
-    #         break
-
-    #     # (종류, ..., 겹침면적) 튜플로 통일해 섞은 뒤 면적 내림차순으로 함께 처리한다.
-    #     combined = (
-    #         [("q", key, qid, area) for key, qid, area in qviol]
-    #         + [("p", ka, kb, area) for ka, kb, area in pviol]
-    #     )
-    #     combined.sort(key=lambda t: -t[-1])
-
-    #     progress = False
-    #     for item in combined:
-    #         if item[0] == "q":
-    #             _, key, qid, _area = item
-    #             box = regions[key]
-    #             q = qubits[qid]
-    #             # 같은 반복 안의 앞선 이동으로 이미 풀렸을 수 있음 — 재확인.
-    #             qx0, qx1, qy0, qy1 = _qubit_aabb(q)
-    #             x0, x1, y0, y1 = box
-    #             if min(x1, qx1) - max(x0, qx0) <= AABB_EPS_UM \
-    #                or min(y1, qy1) - max(y0, qy0) <= AABB_EPS_UM:
-    #                 continue
-    #             cand = _push_qubit_out_of_box(q, box)
-    #             if cand is None:
-    #                 continue
-    #             moves = {qid: cand}
-    #         else:
-    #             _, ka, kb, _area = item
-    #             box_a, box_b = regions.get(ka), regions.get(kb)
-    #             if box_a is None or box_b is None:
-    #                 continue
-    #             # 같은 반복 안의 앞선 이동으로 이미 풀렸을 수 있음 — 재확인.
-    #             ax0, ax1, ay0, ay1 = box_a
-    #             bx0, bx1, by0, by1 = box_b
-    #             overlap_x = min(ax1, bx1) - max(ax0, bx0)
-    #             overlap_y = min(ay1, by1) - max(ay0, by0)
-    #             if overlap_x <= AABB_EPS_UM or overlap_y <= AABB_EPS_UM:
-    #                 continue
-    #             qid_a = _nearest_own_qubit(ka, qubits, box_b)
-    #             qid_b = _nearest_own_qubit(kb, qubits, box_a)
-    #             moves = _box_pair_push_candidates(
-    #                 qubits[qid_a], qid_a, box_a, qubits[qid_b], qid_b, box_b,
-    #                 overlap_x, overlap_y,
-    #             )
-
-    #         result = _try_resolve_candidate(
-    #             qubits, ports, couplers, adj, cmap_edges,
-    #             chip_width, chip_height, min_sep, moves,
-    #         )
-    #         if result is None:
-    #             continue
-    #         trial_qubits, trial_ports, disps = result
-    #         qubits, ports = trial_qubits, trial_ports
-    #         qubit_disp.extend(disps)
-    #         moved_qubits.update(moves)
-    #         progress = True
-
-    #     regions = compute_regions()
-    #     if not progress:
-    #         break
+        regions = compute_regions(adaptive=use_adaptive_regions)
+        if not progress:
+            break
 
     residual_q = len(_box_third_party_violations(qubits, couplers, regions))
     residual_p = len(_box_pair_violations(couplers, regions))
 
-    # if (n_initial_q + n_initial_p) > 0 and not moved_qubits:
-    #     raise PlacementInfeasibleError(
-    #         f"{processor_name}: 박스 겹침 {n_initial_q}건(박스-큐빗)+{n_initial_p}건"
-    #         "(박스-박스) 중 단 한 건도 해소하지 못했습니다(첫 반복부터 모든 후보가 "
-    #         "die 경계/최소간격/임베딩/포트교차 제약에 막힘) — 이 칩에서 이 메커니즘 "
-    #         "자체가 작동하지 않습니다."
-    #     )
+    if residual_q > 0:
+        raise PlacementInfeasibleError(
+            f"{processor_name}: 커플러 경계 겹침을 FP에서 해소하지 못했습니다 "
+            f"(박스-큐빗 {residual_q}/{n_initial_q}건, "
+            f"반복 {iterations_used}회)."
+        )
 
-    # if residual_q > 0 or residual_p > 0:
-    #     logging.warning(
-    #         "[FP] %s: 박스 겹침 잔존 — 박스-큐빗 %d/%d건, 박스-박스 %d/%d건(반복 %d회 "
-    #         "소진 또는 진전 없음). 박스-큐빗 잔존은 region()의 가용 면적 확장이 흡수하지만 "
-    #         "박스-박스 잔존은 그런 폴백이 없다 — GP 경합으로 이어질 수 있다.",
-    #         processor_name, residual_q, n_initial_q, residual_p, n_initial_p, iterations_used,
-    #     )
-
-    # logging.info(
-    #     "[FP] %s: 박스-큐빗 %d->%d건, 박스-박스 %d->%d건, 큐빗 %d개 이동"
-    #     "(변위 avg/max=%.2f/%.2f um, 반복 %d회)",
-    #     processor_name, n_initial_q, residual_q, n_initial_p, residual_p, len(moved_qubits),
-    #     sum(qubit_disp) / len(qubit_disp) if qubit_disp else 0.0,
-    #     max(qubit_disp) if qubit_disp else 0.0, iterations_used,
-    # )
+    if n_initial_q or n_initial_p:
+        logging.info(
+            "[FP] %s: 박스-큐빗 %d->0건, 박스-박스(search-window overlap) %d->%d건, 큐빗 %d개 이동"
+            "(변위 avg/max=%.2f/%.2f um, 반복 %d회)",
+            processor_name, n_initial_q, n_initial_p, residual_p, len(moved_qubits),
+            sum(qubit_disp) / len(qubit_disp) if qubit_disp else 0.0,
+            max(qubit_disp) if qubit_disp else 0.0, iterations_used,
+        )
 
     return qubits, ports, regions
 
@@ -1679,7 +1913,17 @@ class Floorplan:
         coupler_lengths = {edge: state.couplers[edge].l for edge in edges}
 
         # --- 주 경로: spectral/tree/ring 초기배치 + spring 정제 -------------------
-        pos = self._primary_layout(adj, edges, state.chip_width, state.chip_height, coupler_lengths)
+        use_rotations = (not state.processor_name.startswith("aspen")) and state.num_qubits <= 64
+        edge_span_ratio = (
+            float(getattr(self.params, "floorplan_grid_edge_span_ratio", 0.35))
+            if state.processor_name.startswith("grid")
+            else float(getattr(self.params, "floorplan_default_edge_span_ratio", 0.65))
+        )
+        pos = self._primary_layout(
+            adj, edges, state.chip_width, state.chip_height,
+            coupler_lengths, use_rotations=use_rotations,
+            edge_span_ratio=edge_span_ratio,
+        )
 
         # --- 보장 폴백 -----------------------------------------------------------
         # 주 경로는 교차/간격을 사후검증만 하는 필터다. 교차가 남았거나 최소 큐빗 간격을
@@ -1712,7 +1956,10 @@ class Floorplan:
                 )
 
             pos_arr = np.array([guaranteed_pos[i] for i in range(n)], dtype=float)
-            pos = self._scale_chip(pos_arr, state.chip_width, state.chip_height)
+            pos = self._scale_chip(
+                pos_arr, state.chip_width, state.chip_height,
+                guarantee_edges, coupler_lengths, edge_span_ratio=edge_span_ratio,
+            )
             # bbox 정규화(균일 상사변환: scale·shrink 스칼라 하나)라 정수 직선배치의 proper
             # 교차를 뒤집을 수 없다 — 여기서 >0이면 진짜 내부 버그.
             if count_crossings(pos, guarantee_edges) != 0:
@@ -1746,11 +1993,12 @@ class Floorplan:
 
         shared_xing, other_xing = count_port_crossings(new_qubits, state.couplers, ports)
         if shared_xing > 0:
-            raise RuntimeError(
-                f"{state.processor_name}: 같은 큐빗을 공유하는 커플러 쌍 사이에 포트-포트 "
-                f"직선 교차가 {shared_xing}건 남았습니다 — 이웃 방향 포트(qubit_port_toward)는 "
-                "포트 각도가 이웃 각도와 사실상 같아 이 경우가 구조적으로 불가능해야 하므로 "
-                "내부 버그입니다."
+            logging.warning(
+                "[FP] %s: 같은 큐빗을 공유하는 커플러 쌍 사이에 고정 슬롯 포트-포트 "
+                "직선 교차가 %d건 있습니다. 좌/우 4슬롯 포트 정책에서는 구조적으로 0을 "
+                "보장하지 않으므로 실패로 처리하지 않습니다.",
+                state.processor_name,
+                shared_xing,
             )
         if other_xing > 0:
             logging.warning(
@@ -1789,6 +2037,9 @@ class Floorplan:
         new_qubits, ports, coupler_regions = _resolve_box_overlaps(
             state.processor_name, new_qubits, state.couplers, ports,
             edges, state.chip_width, state.chip_height, min_sep, cell,
+            adaptive_extra_cells=int(getattr(self.params, "floorplan_coupler_boundary_extra_cells", 0)),
+            adaptive_overfill_ratio=float(getattr(self.params, "floorplan_coupler_boundary_overfill_ratio", 1.25)),
+            adaptive_max_access_ratio=float(getattr(self.params, "floorplan_coupler_boundary_max_access_ratio", 0.45)),
         )
         n_region_failed = sum(1 for box in coupler_regions.values() if box is None)
         if n_region_failed:
@@ -1818,6 +2069,8 @@ class Floorplan:
         self, adj: dict[int, set[int]], coupling_edges: list[tuple[int, int]],
         chip_width: float, chip_height: float,
         coupler_lengths: dict[tuple[int, int], float] | None = None,
+        use_rotations: bool = True,
+        edge_span_ratio: float = 0.65,
         seed: int | None = None,
     ) -> dict[int, tuple[float, float]]:
         real_edges = set(coupling_edges)
@@ -1871,13 +2124,18 @@ class Floorplan:
 
         bst_pos = None
         bst_score = None
+        bst_zero_shape = None
         base_seed = 0 if seed is None else seed
         base_candidates = int(getattr(self.params, "floorplan_candidate_count", 48))
 
         n_scale = max(n, 1)
         effort_scale = math.sqrt(n_scale / 27.0)
-        candidate_cnt = max(8, int(base_candidates * effort_scale))
-        spring_iters = max(200, int(420 * effort_scale))
+        if n > 64:
+            candidate_cnt = 2
+            spring_iters = 80
+        else:
+            candidate_cnt = min(12, max(8, int(base_candidates * effort_scale)))
+            spring_iters = min(300, max(160, int(420 * effort_scale)))
 
         octagon_rings = _detect_octagon_rings(list(real_edges), n)
         if not _ring_coverage_sufficient(octagon_rings, n):
@@ -1911,20 +2169,38 @@ class Floorplan:
                 pos = _spectral_initial_coordinate(adj, edges, rng)
                 pos = _spring_refine_coordinate(pos, edges, edge_target=edge_target, iterations=spring_iters)
 
-            crossing_cnt = _cnt_edge_crossing(pos, sorted(real_edges))
-            bbox_area = float(np.prod(np.maximum(np.ptp(pos, axis=0), 1e-9)))
-            score = crossing_cnt * 1_000_000.0 + bbox_area
-            if bst_score is None or score < bst_score:
-                bst_score, bst_pos = score, pos.copy()
+            found_zero_crossing = False
+            rotation_candidates = (0.0, math.pi / 6.0, math.pi / 4.0, math.pi / 3.0) if use_rotations else (0.0,)
+            for theta in rotation_candidates:
+                cand_pos = pos if theta == 0.0 else _rotate_pos(pos, theta)
+                crossing_cnt = _cnt_edge_crossing(cand_pos, sorted(real_edges))
                 if crossing_cnt == 0:
-                    break
+                    found_zero_crossing = True
+                bbox_area = float(np.prod(np.maximum(np.ptp(cand_pos, axis=0), 1e-9)))
+                shape_penalty = _edge_box_shape_penalty(cand_pos, sorted(real_edges))
+                score = crossing_cnt * 1_000_000.0 + bbox_area * (1.0 + 0.18 * shape_penalty)
+                if bst_score is None or score < bst_score:
+                    bst_score, bst_pos = score, cand_pos.copy()
+                    if crossing_cnt == 0:
+                        bst_zero_shape = shape_penalty
+            if found_zero_crossing:
+                break
 
-        return self._scale_chip(bst_pos, chip_width, chip_height)
+        return self._scale_chip(
+            bst_pos, chip_width, chip_height,
+            coupling_edges, coupler_lengths,
+            edge_span_ratio=edge_span_ratio,
+        )
 
-    # bbox 정규화만 한다(01_mainref의 커플러 target_span 기반 분기는 제외) — FP는 커플러
-    # 스펙/세그먼트를 다루지 않으므로 그 분기가 필요로 하는 정보 자체가 없다. 배치를
-    # 중심으로 모은 뒤, die 안(마진 제외)에 딱 맞도록 균일 확대/축소한다.
-    def _scale_chip(self, pos: np.ndarray, chip_width: float, chip_height: float) -> dict[int, tuple[float, float]]:
+    # 배치를 중심으로 모은 뒤 die 안에 넣되, 큰 die를 억지로 꽉 채우지는 않는다. 커플러
+    # 물리 길이보다 qubit 간 edge가 훨씬 길어지면 GP가 포트-포트 최소 경로조차 만들 수
+    # 없으므로, coupling edge의 median 길이가 coupler.l median을 넘지 않도록 scale 상한을 둔다.
+    def _scale_chip(
+        self, pos: np.ndarray, chip_width: float, chip_height: float,
+        coupling_edges: list[tuple[int, int]] | None = None,
+        coupler_lengths: dict[tuple[int, int], float] | None = None,
+        edge_span_ratio: float = 0.65,
+    ) -> dict[int, tuple[float, float]]:
         qubit_width, qubit_height = float(self.params.qubit_width), float(self.params.qubit_height)
         margin_x = max(qubit_width, chip_width * 0.02)
         margin_y = max(qubit_height, chip_height * 0.02)
@@ -1935,6 +2211,22 @@ class Floorplan:
         extent = np.max(np.abs(centered), axis=0)
         extent[extent < 1e-9] = 1.0
         shrink = min(half_w / extent[0], half_h / extent[1])
+
+        if coupling_edges and coupler_lengths:
+            edge_scale_caps = []
+            for u, v in coupling_edges:
+                edge = (min(u, v), max(u, v))
+                if edge not in coupler_lengths:
+                    continue
+                d = float(np.linalg.norm(centered[u] - centered[v]))
+                if d <= 1e-9:
+                    continue
+                budget = float(coupler_lengths[edge])
+                if budget > 0.0:
+                    edge_scale_caps.append((budget * edge_span_ratio) / d)
+            if edge_scale_caps:
+                shrink = min(shrink, min(edge_scale_caps))
+
         centered = centered * shrink
 
         cx, cy = chip_width / 2.0, chip_height / 2.0
